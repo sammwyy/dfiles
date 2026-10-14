@@ -1,0 +1,32 @@
+[package]
+name = "dfiles"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "A native, system-integrated file explorer for Linux"
+repository = "https://github.com/sammwyy/dfiles"
+homepage = "https://github.com/sammwyy/dfiles"
+readme = "README.md"
+keywords = ["file-manager", "file-explorer", "native", "xdg", "portal"]
+categories = ["filesystem", "gui"]
+
+[[bin]]
+name = "dfiles"
+path = "src/main.rs"
+
+[dependencies]
+dbus = "0.9"
+url = "2"
+libc = "0.2"
+mime_guess = "2"
+creamui-image = { git = "https://github.com/sammwyy/creamui.git", rev = "9a16176b697ff092955c91dcb3616f65ba47f587", features = ["svg"] }
+creamui-core = { git = "https://github.com/sammwyy/creamui.git", rev = "9a16176b697ff092955c91dcb3616f65ba47f587" }
+creamui-reactive = { git = "https://github.com/sammwyy/creamui.git", rev = "9a16176b697ff092955c91dcb3616f65ba47f587" }
+creamui-render = { git = "https://github.com/sammwyy/creamui.git", rev = "9a16176b697ff092955c91dcb3616f65ba47f587", features = ["platform-wayland", "system-theme", "platform-window-integration-blair", "platform-blur-blair", "platform-blur-kwin"] }
+creamui-theme = { git = "https://github.com/sammwyy/creamui.git", rev = "9a16176b697ff092955c91dcb3616f65ba47f587" }
+creamui-theme-loader = { git = "https://github.com/sammwyy/creamui.git", rev = "9a16176b697ff092955c91dcb3616f65ba47f587" }
+creamui-fonts = { git = "https://github.com/sammwyy/creamui.git", rev = "9a16176b697ff092955c91dcb3616f65ba47f587" }
+creamui-widgets = { git = "https://github.com/sammwyy/creamui.git", rev = "9a16176b697ff092955c91dcb3616f65ba47f587" }
+
+[dev-dependencies]
+tempfile = "3"

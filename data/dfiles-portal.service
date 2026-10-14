@@ -1,0 +1,9 @@
+[Unit]
+Description=File Explorer XDG Desktop Portal backend
+PartOf=graphical-session.target
+
+[Service]
+Type=dbus
+BusName=org.freedesktop.impl.portal.desktop.dfiles
+ExecStart=/usr/bin/dfiles --portal
+Restart=on-failure

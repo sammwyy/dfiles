@@ -1,0 +1,71 @@
+name: Release artifact
+
+on:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  BINARY_NAME: dfiles
+  TARGET: x86_64-unknown-linux-gnu
+
+jobs:
+  build:
+    name: Build Linux release artifact
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out the tagged source
+        uses: actions/checkout@v4
+
+      - name: Install the Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Restore Cargo cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            build-essential \
+            libdbus-1-dev \
+            libwayland-dev \
+            libxkbcommon-dev \
+            pkg-config
+
+      - name: Test
+        run: cargo test --locked
+
+      - name: Build the release binary
+        run: cargo build --locked --release --target "$TARGET" --bin "$BINARY_NAME"
+
+      - name: Compress the binary with UPX
+        uses: svenstaro/upx-action@v2
+        with:
+          file: target/${{ env.TARGET }}/release/${{ env.BINARY_NAME }}
+          args: --best --lzma
+
+      - name: Name the distributable
+        id: package
+        shell: bash
+        run: |
+          mkdir -p dist
+          filename="${BINARY_NAME}-${GITHUB_REF_NAME}-${TARGET}"
+          cp "target/${TARGET}/release/${BINARY_NAME}" "dist/${filename}"
+          chmod 755 "dist/${filename}"
+          echo "filename=${filename}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.filename }}
+          path: dist/${{ steps.package.outputs.filename }}
+          if-no-files-found: error
+          retention-days: 90

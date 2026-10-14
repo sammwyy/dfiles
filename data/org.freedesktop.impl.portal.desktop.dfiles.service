@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=org.freedesktop.impl.portal.desktop.dfiles
+Exec=/usr/bin/dfiles --portal
+SystemdService=dfiles-portal.service
