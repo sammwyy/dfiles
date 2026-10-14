@@ -19,6 +19,7 @@ dbus = "0.9"
 url = "2"
 libc = "0.2"
 mime_guess = "2"
+delib = "0.1.0"
 creamui-image = { git = "https://github.com/sammwyy/creamui.git", rev = "9a16176b697ff092955c91dcb3616f65ba47f587", features = ["svg"] }
 creamui-core = { git = "https://github.com/sammwyy/creamui.git", rev = "9a16176b697ff092955c91dcb3616f65ba47f587" }
 creamui-reactive = { git = "https://github.com/sammwyy/creamui.git", rev = "9a16176b697ff092955c91dcb3616f65ba47f587" }

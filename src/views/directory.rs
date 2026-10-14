@@ -14,21 +14,9 @@ pub(crate) fn visible_entries(b: &BrowserState, tab: &Tab) -> Vec<files::Entry> 
 pub(crate) fn directory_view(b: &BrowserState, tab: &Tab, width: f32) -> BoxedWidget {
     let t = use_theme();
     let entries = visible_entries(b, tab);
-    let header = view(
-        row(0.0),
-        vec![view(
-            Style {
-                flex_grow: 1.0,
-                ..row(0.0)
-            },
-            vec![Box::new(
-                Text::new(short(&tab.location().label(), 36))
-                    .font_size(20.0)
-                    .bold(true),
-            )],
-        )],
-    );
-    let mut content = vec![header];
+    // The address bar and tab already identify the current folder. Starting
+    // with the content keeps the directory view from repeating that name.
+    let mut content = Vec::new();
     if let Some(error) = &tab.error {
         content.push(empty_view(b, "This folder is unavailable", error));
     } else if entries.is_empty() {

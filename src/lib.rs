@@ -6,6 +6,7 @@ pub mod cli;
 mod components;
 pub mod context;
 mod filesystem;
+mod icon_theme;
 mod icons;
 mod navigation;
 pub mod portal;

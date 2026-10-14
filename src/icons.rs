@@ -1,9 +1,14 @@
+use crate::icon_theme::IconTheme;
 use creamui_image::{ImageData, SvgSize};
 use creamui_widgets::{IconImage, IconSource};
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 #[derive(Clone)]
-pub(crate) struct Icons(HashMap<&'static str, IconSource>);
+pub(crate) struct Icons {
+    fallback: HashMap<&'static str, IconSource>,
+    theme: IconTheme,
+    themed: Rc<RefCell<HashMap<String, IconSource>>>,
+}
 
 impl Icons {
     pub fn load() -> Self {
@@ -81,10 +86,47 @@ impl Icons {
             icons.insert(name, decode(&svg, true));
         }
         icons.insert("folder-large", decode(r##"<svg xmlns="http://www.w3.org/2000/svg" width="80" height="64" viewBox="0 0 80 64"><defs><linearGradient id="f" x2="0.8" y2="1"><stop stop-color="#efcc83"/><stop offset="1" stop-color="#dca751"/></linearGradient></defs><path fill="#c99345" d="M5 14a5 5 0 0 1 5-5h19l7 7h34a5 5 0 0 1 5 5v33H5Z"/><rect x="5" y="20" width="70" height="36" rx="5" fill="url(#f)"/><path d="M10 21h59" stroke="#fff" stroke-opacity=".45"/></svg>"##, false));
-        Self(icons)
+        Self {
+            fallback: icons,
+            theme: IconTheme::system(),
+            themed: Rc::new(RefCell::new(HashMap::new())),
+        }
     }
     pub fn get(&self, name: &str) -> IconSource {
-        self.0.get(name).unwrap_or(&self.0["file"]).clone()
+        if let Some(names) = themed_names(name) {
+            if let Some(icon) = self.themed.borrow().get(name).cloned() {
+                return icon;
+            }
+            if let Some(image) = self.theme.load(names) {
+                let icon = IconSource::Image(IconImage {
+                    image: image.image().clone(),
+                    monochrome: false,
+                });
+                self.themed.borrow_mut().insert(name.into(), icon.clone());
+                return icon;
+            }
+        }
+        self.fallback
+            .get(name)
+            .unwrap_or(&self.fallback["file"])
+            .clone()
+    }
+}
+
+/// Navigation glyphs remain bundled; places and file categories deliberately
+/// use semantic Freedesktop names so the desktop's icon pack supplies them.
+fn themed_names(name: &str) -> Option<&'static [&'static str]> {
+    match name {
+        "home" => Some(&["user-home", "go-home"]),
+        "folder" | "folder-large" => Some(&["folder"]),
+        "file" => Some(&["text-x-generic", "unknown"]),
+        "desktop" => Some(&["user-desktop", "desktop"]),
+        "download" => Some(&["folder-download", "folder"]),
+        "image" => Some(&["image-x-generic", "image"]),
+        "video" => Some(&["video-x-generic", "video"]),
+        "music" => Some(&["audio-x-generic", "audio"]),
+        "drive" => Some(&["drive-harddisk", "drive"]),
+        _ => None,
     }
 }
 

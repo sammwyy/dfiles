@@ -32,10 +32,11 @@ fn build_scoped(b: &BrowserState, size: Size) -> BoxedWidget {
         )
         .child(content),
     );
-    let mut main = vec![
-        tab_bar(b, size.width, sidebar_width),
-        toolbar(b, &tab, content_width),
-    ];
+    let mut main = Vec::new();
+    if let Some(tabs) = tab_bar(b, size.width, sidebar_width) {
+        main.push(tabs);
+    }
+    main.push(toolbar(b, &tab, content_width));
     if let Some(filters) = crate::components::portal_footer::filter_bar(b) {
         main.push(filters);
     }

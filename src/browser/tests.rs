@@ -297,14 +297,14 @@ fn native_layout_and_portal_previews() {
             scene
         };
         let scene = render(&browser, size, "home");
-        assert!(scene.window_drag_at(Point { x: 800.0, y: 26.0 }).is_some());
-        assert!(scene.window_drag_at(Point { x: 600.0, y: 80.0 }).is_none());
+        assert!(scene.window_drag_at(Point { x: 365.0, y: 26.0 }).is_some());
+        assert!(scene.window_drag_at(Point { x: 600.0, y: 26.0 }).is_none());
         assert!(
             scene.hit_test(Point { x: 1090.0, y: 28.0 }).is_none(),
             "compositor owns hybrid controls"
         );
         scene
-            .hit_test(Point { x: 451.0, y: 26.0 })
+            .hit_test(Point { x: 865.0, y: 26.0 })
             .expect("new tab button")();
         assert_eq!(browser.tabs.peek().len(), 2);
         browser.navigate(Location::Directory(fixture.path().to_path_buf()));
@@ -345,7 +345,7 @@ fn native_layout_and_portal_previews() {
         assert!(browser.tab().scroll.offset() > 0.0);
         browser.tab().scroll.set(0.0);
         let focus = compact
-            .focus_hit_test(Point { x: 300.0, y: 254.0 })
+            .focus_hit_test(Point { x: 300.0, y: 212.0 })
             .expect("first folder");
         compact.on_key_at(focus).unwrap()(creamui_core::KeyInput {
             key: creamui_core::Key::Enter,

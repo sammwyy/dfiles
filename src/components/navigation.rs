@@ -1,7 +1,17 @@
 use super::*;
 use crate::views::directory::visible_entries;
 
-pub(crate) fn tab_bar(b: &BrowserState, window_width: f32, sidebar_width: f32) -> BoxedWidget {
+pub(crate) fn tab_bar(
+    b: &BrowserState,
+    window_width: f32,
+    sidebar_width: f32,
+) -> Option<BoxedWidget> {
+    // A lone tab does not need its own title strip: its location is already
+    // visible in the address bar. Show the strip only when it is needed to
+    // switch between tabs, reclaiming that vertical space for the file list.
+    if b.tabs.get().len() == 1 {
+        return None;
+    }
     let width = window_width - sidebar_width;
     let t = use_theme();
     let decorations = creamui_render::use_window_decorations();
@@ -23,8 +33,11 @@ pub(crate) fn tab_bar(b: &BrowserState, window_width: f32, sidebar_width: f32) -
         0
     };
     let end = (start + capacity).min(tabs.len());
-    let tab_width = ((width - reserved - if paged { 136.0 } else { 66.0 }) / (end - start) as f32)
-        .clamp(58.0, 188.0);
+    // Fill the usable strip instead of leaving a large, ambiguous blank area.
+    // `reserved` is supplied by the compositor/window decorations, so tabs
+    // never extend under KWin's (or another compositor's) window controls.
+    let tab_width =
+        ((width - reserved - if paged { 136.0 } else { 66.0 }) / (end - start) as f32).max(58.0);
     let mut children = Vec::new();
     if paged {
         let previous = b.clone();
@@ -123,7 +136,7 @@ pub(crate) fn tab_bar(b: &BrowserState, window_width: f32, sidebar_width: f32) -
     } else {
         children.push(view(fixed(reserved, 1.0), vec![]));
     }
-    Box::new(
+    Some(Box::new(
         RawView::new(pad(
             Style {
                 size: creamui_core::layout::Size {
@@ -138,7 +151,7 @@ pub(crate) fn tab_bar(b: &BrowserState, window_width: f32, sidebar_width: f32) -
         ))
         .background(t.colors.surface.mix(t.colors.accent, 0.025))
         .with_children(children),
-    )
+    ))
 }
 
 pub(crate) fn toolbar(b: &BrowserState, tab: &Tab, width: f32) -> BoxedWidget {
@@ -148,6 +161,7 @@ pub(crate) fn toolbar(b: &BrowserState, tab: &Tab, width: f32) -> BoxedWidget {
     let up = b.clone();
     let address = b.clone();
     let refresh = b.clone();
+    let add = b.clone();
     let list = b.clone();
     let grid = b.clone();
     let parent = match tab.location() {
@@ -169,6 +183,11 @@ pub(crate) fn toolbar(b: &BrowserState, tab: &Tab, width: f32) -> BoxedWidget {
             }
         }),
     ];
+    if b.tabs.get().len() == 1 {
+        // Keep a compact, dedicated drag handle when the single-tab strip is
+        // hidden. It replaces the otherwise empty title-strip real estate.
+        items.push(Box::new(CUIWindowDragArea::new().layout(fixed(24.0, 32.0))));
+    }
     items.push(Box::new(
         TextInput::controlled(&tab.address)
             .layout(Style {
@@ -190,6 +209,9 @@ pub(crate) fn toolbar(b: &BrowserState, tab: &Tab, width: f32) -> BoxedWidget {
         refresh.edit(Tab::reload);
         refresh.drives.set(files::drives());
     }));
+    if b.tabs.get().len() == 1 {
+        items.push(icon_button(b, "plus", true, false, move || add.add_tab()));
+    }
     let search_width = if width < 650.0 { 132.0 } else { 210.0 };
     items.push(Box::new(
         RawView::new(pad(fixed(search_width, 34.0), 10.0, 0.0))
