@@ -516,6 +516,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "creamui-theme-watch"
+version = "0.2.0"
+dependencies = [
+ "dbus",
+ "log",
+]
+
+[[package]]
 name = "creamui-widgets"
 version = "0.2.0"
 dependencies = [
@@ -605,6 +613,7 @@ dependencies = [
  "creamui-render",
  "creamui-theme",
  "creamui-theme-loader",
+ "creamui-theme-watch",
  "creamui-widgets",
  "dbus",
  "delib",

@@ -30,10 +30,22 @@ pub(crate) struct Tab {
     pub(crate) error: Option<String>,
     pub(crate) selected: Option<PathBuf>,
     pub(crate) grid: bool,
+    pub(crate) sort: SortColumn,
+    pub(crate) sort_ascending: bool,
     pub(crate) show_hidden: bool,
     pub(crate) address: TextController,
     pub(crate) search: TextController,
     pub(crate) scroll: ScrollController,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SortColumn {
+    Name,
+    Size,
+    Kind,
+    Modified,
+    Created,
+    Permissions,
 }
 impl Tab {
     pub(crate) fn new(location: Location, explorer: &ExplorerConfig) -> Self {
@@ -45,6 +57,8 @@ impl Tab {
             error: None,
             selected: None,
             grid: explorer.default_grid_view,
+            sort: SortColumn::Name,
+            sort_ascending: true,
             show_hidden: explorer.show_hidden,
             search: TextController::new(""),
             scroll: ScrollController::new(0.0),

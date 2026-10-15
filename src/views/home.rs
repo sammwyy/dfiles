@@ -55,7 +55,12 @@ pub(crate) fn home_view(b: &BrowserState, tab: &Tab, width: f32) -> BoxedWidget 
                 drive
                     .space
                     .map(|(free, total)| {
-                        format!("{} free of {}", files::size(free), files::size(total))
+                        format!(
+                            "{} used of {} ({}%)",
+                            files::size(total.saturating_sub(free)),
+                            files::size(total),
+                            (100.0 * (1.0 - free as f32 / total.max(1) as f32)).round()
+                        )
                     })
                     .unwrap_or_else(|| drive.path.display().to_string()),
                 11.0,
@@ -74,7 +79,11 @@ pub(crate) fn home_view(b: &BrowserState, tab: &Tab, width: f32) -> BoxedWidget 
                     .corner_radius(2.0)
                     .child(Box::new(
                         RawView::new(fixed((card_width - 94.0) * used.clamp(0.0, 1.0), 4.0))
-                            .background(t.colors.accent)
+                            .background(if used >= 0.9 {
+                                t.colors.danger
+                            } else {
+                                t.colors.accent
+                            })
                             .corner_radius(2.0),
                     )),
             ));
@@ -133,6 +142,9 @@ pub(crate) fn home_view(b: &BrowserState, tab: &Tab, width: f32) -> BoxedWidget 
                 path: path.clone(),
                 directory: false,
                 bytes: 0,
+                modified: None,
+                created: None,
+                permissions: 0,
             },
             vec![
                 glyph(b, file_icon(Path::new(&filename)), 20.0, t.colors.accent),

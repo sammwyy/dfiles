@@ -1,4 +1,7 @@
-use self::{directory::directory_view, home::home_view};
+use self::{
+    directory::{directory_header, directory_view},
+    home::home_view,
+};
 use crate::components::*;
 use crate::components::{navigation::*, portal_footer::portal_footer, sidebar::sidebar};
 use crate::config::TabPosition;
@@ -55,6 +58,11 @@ fn build_scoped(b: &BrowserState, size: Size) -> BoxedWidget {
     ));
     if let Some(filters) = crate::components::portal_footer::filter_bar(b) {
         main.push(filters);
+    }
+    if tab.location() != &Location::Home {
+        // This is deliberately outside RawScrollView: column labels remain
+        // available while a long directory is being scrolled.
+        main.push(directory_header(b, &tab));
     }
     main.push(scroll as BoxedWidget);
     if let Some(message) = b.message.get() {

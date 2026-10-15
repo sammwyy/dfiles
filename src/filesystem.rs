@@ -1,8 +1,10 @@
+use std::os::unix::fs::PermissionsExt;
 use std::{
     ffi::CString,
     fs, io,
     os::unix::ffi::OsStrExt,
     path::{Path, PathBuf},
+    time::SystemTime,
 };
 use url::Url;
 
@@ -11,6 +13,9 @@ pub(crate) struct Entry {
     pub path: PathBuf,
     pub directory: bool,
     pub bytes: u64,
+    pub modified: Option<SystemTime>,
+    pub created: Option<SystemTime>,
+    pub permissions: u32,
 }
 
 impl Entry {
@@ -56,6 +61,9 @@ pub(crate) fn entries(path: &Path, show_hidden: bool) -> io::Result<Vec<Entry>> 
             path: entry.path(),
             directory: metadata.is_dir(),
             bytes: metadata.len(),
+            modified: metadata.modified().ok(),
+            created: metadata.created().ok(),
+            permissions: metadata.permissions().mode() & 0o777,
         });
     }
     items.sort_by(|a, b| {

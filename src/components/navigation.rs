@@ -161,8 +161,6 @@ pub(crate) fn toolbar(
     let refresh = b.clone();
     let settings = b.clone();
     let add = b.clone();
-    let list = b.clone();
-    let grid = b.clone();
     let parent = match tab.location() {
         Location::Directory(p) => p.parent().map(Path::to_path_buf),
         _ => None,
@@ -253,13 +251,7 @@ pub(crate) fn toolbar(
         items.push(icon_button(b, "plus", true, false, move || add.add_tab()));
     }
     if tab.location() != &Location::Home {
-        items.push(view_mode_switcher(
-            b,
-            tab.grid,
-            compact_view_mode,
-            list,
-            grid,
-        ));
+        items.push(view_mode_switcher(b, tab.grid, compact_view_mode));
     }
     if let Some(controls) = show_client_controls
         .then(|| window_chrome::client_controls(&b.icons, &b.window, &b.maximized))
@@ -287,60 +279,15 @@ pub(crate) fn toolbar(
     )
 }
 
-fn view_mode_switcher(
-    b: &BrowserState,
-    grid_active: bool,
-    compact: bool,
-    list: BrowserState,
-    grid: BrowserState,
-) -> BoxedWidget {
-    let t = use_theme();
-    if compact {
-        let toggle = b.clone();
-        return icon_button(
-            b,
-            if grid_active { "list" } else { "grid" },
-            true,
-            true,
-            move || toggle.edit(|tab| tab.grid = !tab.grid),
-        );
-    }
-    Box::new(
-        RawView::new(fixed(68.0, 32.0))
-            .background(t.colors.surface_elevated)
-            .corner_radius(8.0)
-            .with_children(vec![
-                Box::new(button(
-                    fixed(34.0, 32.0),
-                    !grid_active,
-                    move || list.edit(|tab| tab.grid = false),
-                    vec![glyph(
-                        b,
-                        "list",
-                        16.0,
-                        if !grid_active {
-                            t.colors.accent
-                        } else {
-                            t.colors.text_secondary
-                        },
-                    )],
-                )),
-                Box::new(button(
-                    fixed(34.0, 32.0),
-                    grid_active,
-                    move || grid.edit(|tab| tab.grid = true),
-                    vec![glyph(
-                        b,
-                        "grid",
-                        16.0,
-                        if grid_active {
-                            t.colors.accent
-                        } else {
-                            t.colors.text_secondary
-                        },
-                    )],
-                )),
-            ]),
+fn view_mode_switcher(b: &BrowserState, grid_active: bool, _compact: bool) -> BoxedWidget {
+    let toggle = b.clone();
+    // A compact, centered button replaces the former two-option selector.
+    icon_button(
+        b,
+        if grid_active { "list" } else { "grid" },
+        true,
+        false,
+        move || toggle.edit(|tab| tab.grid = !tab.grid),
     )
 }
 

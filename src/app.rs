@@ -1,22 +1,13 @@
 use crate::{browser::BrowserState, window::WindowRequest};
 use creamui_render::{AppBuilder, AppHandle, BlurRegion, WindowHandle, WindowOptions};
 use creamui_theme::{Color, Theme};
-use dbus::{blocking::Connection, message::MatchRule};
+use creamui_theme_watch::ThemeListener;
 use std::{
     cell::RefCell,
     fs,
     rc::Rc,
-    sync::{
-        mpsc::{self, Receiver},
-        Arc, Mutex,
-    },
-    thread,
-    time::Duration,
+    sync::{Arc, Mutex},
 };
-
-const THEME_PATH: &str = "/org/creamui/Theme";
-const THEME_INTERFACE: &str = "org.creamui.Theme";
-const THEME_RELOAD: &str = "ReloadTheme";
 
 /// The manager and the portal render the same native browser tree.
 pub fn show_window(request: WindowRequest) -> Option<crate::portal::PortalSelection> {
@@ -34,7 +25,7 @@ pub fn show_window(request: WindowRequest) -> Option<crate::portal::PortalSelect
         theme: load_system_theme(),
         ..Default::default()
     };
-    let theme_events = Arc::new(Mutex::new(listen_for_theme_reloads()));
+    let theme_events = Arc::new(Mutex::new(ThemeListener::start()));
     AppBuilder::new()
         .on_started(move |app| {
             let ready_window = window.clone();
@@ -73,7 +64,7 @@ pub fn show_settings() {
         theme: load_system_theme(),
         ..Default::default()
     };
-    let theme_events = Arc::new(Mutex::new(listen_for_theme_reloads()));
+    let theme_events = Arc::new(Mutex::new(ThemeListener::start()));
     AppBuilder::new()
         .on_started(move |app| {
             let ready_window = window.clone();
@@ -108,49 +99,22 @@ fn load_system_theme() -> Theme {
     }
 }
 
-/// Coconut broadcasts this signal after Settings persists a new CreamUI
-/// appearance. Keep the receiver on its own D-Bus connection so it cannot
-/// block the native UI event loop.
-fn listen_for_theme_reloads() -> Receiver<()> {
-    let (sender, receiver) = mpsc::channel();
-    thread::spawn(move || {
-        let Ok(connection) = Connection::new_session() else {
-            eprintln!("files: session bus unavailable; live theme updates are disabled");
-            return;
-        };
-        if let Err(error) = connection.add_match(
-            MatchRule::new_signal(THEME_INTERFACE, THEME_RELOAD).with_path(THEME_PATH),
-            move |_: (), _, _| sender.send(()).is_ok(),
-        ) {
-            eprintln!("files: failed to listen for CreamUI theme updates: {error}");
-            return;
-        }
-        loop {
-            if let Err(error) = connection.process(Duration::from_secs(1)) {
-                eprintln!("files: CreamUI theme listener stopped: {error}");
-                return;
-            }
-        }
-    });
-    receiver
-}
-
 fn watch_theme_reloads(
     app: AppHandle,
-    events: Arc<Mutex<Receiver<()>>>,
+    listener: Arc<Mutex<ThemeListener>>,
     window: Rc<RefCell<Option<WindowHandle>>>,
 ) {
     let next_app = app.clone();
-    let next_events = events.clone();
+    let next_listener = listener.clone();
     let next_window = window.clone();
     app.spawn_background(
-        move || events.lock().is_ok_and(|events| events.recv().is_ok()),
+        move || listener.lock().is_ok_and(|listener| listener.recv()),
         move |changed| {
             if changed {
                 if let Some(window) = window.borrow().as_ref() {
                     window.set_theme(load_system_theme());
                 }
-                watch_theme_reloads(next_app, next_events, next_window);
+                watch_theme_reloads(next_app, next_listener, next_window);
             }
         },
     );

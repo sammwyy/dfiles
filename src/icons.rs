@@ -53,6 +53,8 @@ impl Icons {
             ("back", r#"<path d="m10 5-7 7 7 7M3 12h18"/>"#),
             ("forward", r#"<path d="m14 5 7 7-7 7M3 12h18"/>"#),
             ("up", r#"<path d="m5 10 7-7 7 7M12 3v18"/>"#),
+            ("chevron-up", r#"<path d="m6 14 6-6 6 6"/>"#),
+            ("chevron-down", r#"<path d="m6 10 6 6 6-6"/>"#),
             (
                 "search",
                 r#"<circle cx="10" cy="10" r="6.5"/><path d="m15 15 6 6"/>"#,

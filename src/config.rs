@@ -22,6 +22,43 @@ pub struct ExplorerConfig {
     pub tab_position: TabPosition,
     /// Display the current selection and item count in the status area.
     pub show_statusbar: bool,
+    /// Columns shown in the details presentation.
+    pub columns: DetailColumns,
+    /// Scale used for file and folder tiles/rows.
+    pub item_size: ItemSize,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct DetailColumns {
+    pub name: bool,
+    pub size: bool,
+    pub kind: bool,
+    pub modified: bool,
+    pub created: bool,
+    pub permissions: bool,
+}
+
+impl Default for DetailColumns {
+    fn default() -> Self {
+        Self {
+            name: true,
+            size: true,
+            kind: true,
+            modified: true,
+            created: false,
+            permissions: false,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ItemSize {
+    Compact,
+    #[default]
+    Default,
+    Large,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -50,6 +87,8 @@ impl Default for ExplorerConfig {
             default_grid_view: false,
             tab_position: TabPosition::Top,
             show_statusbar: true,
+            columns: DetailColumns::default(),
+            item_size: ItemSize::default(),
         }
     }
 }
@@ -104,6 +143,9 @@ mod tests {
         assert!(!config.explorer.default_grid_view);
         assert_eq!(config.explorer.tab_position, TabPosition::Top);
         assert!(config.explorer.show_statusbar);
+        assert!(config.explorer.columns.name);
+        assert!(config.explorer.columns.modified);
+        assert_eq!(config.explorer.item_size, ItemSize::Default);
         assert_eq!(config.shortcuts.get("search"), Some(&"Ctrl+Shift+F".into()));
         assert!(toml::to_string(&config).unwrap().contains("[explorer]"));
     }

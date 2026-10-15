@@ -58,10 +58,9 @@ pub(crate) fn sidebar(b: &BrowserState, tab: &Tab) -> BoxedWidget {
     for drive in b.drives.get() {
         let state = b.clone();
         let path = drive.path.clone();
-        drives.push(nav_item(
+        drives.push(drive_item(
             b,
-            &drive.label,
-            "drive",
+            &drive,
             tab.location() == &Location::Directory(path.clone()),
             move || state.navigate(Location::Directory(path.clone())),
         ));
@@ -74,6 +73,84 @@ pub(crate) fn sidebar(b: &BrowserState, tab: &Tab) -> BoxedWidget {
             sidebar_section("Drives", drives),
         ],
     )
+}
+
+fn drive_item(
+    b: &BrowserState,
+    drive: &files::Drive,
+    active: bool,
+    click: impl Fn() + 'static,
+) -> BoxedWidget {
+    let t = use_theme();
+    let (used, detail) = drive
+        .space
+        .map(|(free, total)| {
+            let used = if total == 0 {
+                0.0
+            } else {
+                1.0 - free as f32 / total as f32
+            };
+            (
+                used.clamp(0.0, 1.0),
+                format!(
+                    "{} used of {}",
+                    files::size(total.saturating_sub(free)),
+                    files::size(total)
+                ),
+            )
+        })
+        .unwrap_or((0.0, drive.path.display().to_string()));
+    let color = if used >= 0.9 {
+        t.colors.danger
+    } else {
+        t.colors.accent
+    };
+    Box::new(button(
+        pad(
+            Style {
+                flex_shrink: 0.0,
+                ..column(4.0)
+            },
+            9.0,
+            6.0,
+        ),
+        active,
+        click,
+        vec![
+            view(
+                row(11.0),
+                vec![
+                    glyph(
+                        b,
+                        "drive",
+                        17.0,
+                        if active {
+                            t.colors.accent
+                        } else {
+                            t.colors.text_secondary
+                        },
+                    ),
+                    label(short(&drive.label, 21), 13.0, !active),
+                ],
+            ),
+            view(
+                column(3.0),
+                vec![
+                    Box::new(
+                        RawView::new(fixed(166.0, 4.0))
+                            .background(t.colors.border)
+                            .corner_radius(2.0)
+                            .child(Box::new(
+                                RawView::new(fixed(166.0 * used, 4.0))
+                                    .background(color)
+                                    .corner_radius(2.0),
+                            )),
+                    ),
+                    label(detail, 10.0, true),
+                ],
+            ),
+        ],
+    ))
 }
 
 fn sidebar_section(title: &str, items: Vec<BoxedWidget>) -> BoxedWidget {

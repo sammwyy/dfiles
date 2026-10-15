@@ -2,7 +2,7 @@
 
 use crate::components::{window_chrome, CLEAR};
 use crate::{
-    config::{Config, TabPosition},
+    config::{Config, ItemSize, TabPosition},
     shortcuts::{Action, Binding},
 };
 use creamui_core::{
@@ -367,8 +367,49 @@ fn browsing(state: &State) -> BoxedWidget {
             state.persist();
         }
     });
+    let item_size = SegmentedControl::new(
+        match config.explorer.item_size {
+            ItemSize::Compact => 0,
+            ItemSize::Default => 1,
+            ItemSize::Large => 2,
+        },
+        {
+            let state = state.clone();
+            move |index| {
+                state.config.update(|config| {
+                    config.explorer.item_size = match index {
+                        0 => ItemSize::Compact,
+                        2 => ItemSize::Large,
+                        _ => ItemSize::Default,
+                    }
+                });
+                state.persist();
+            }
+        },
+    )
+    .option("Compact")
+    .option("Default")
+    .option("Large");
+    let columns = section(
+        "Details columns",
+        vec![
+            column_switch(state, "Name", "File or folder name.", |c| &mut c.name),
+            column_switch(state, "Size", "File size.", |c| &mut c.size),
+            column_switch(state, "Type", "Folder or file type.", |c| &mut c.kind),
+            column_switch(state, "Modification date", "Most recent change.", |c| {
+                &mut c.modified
+            }),
+            column_switch(state, "Creation date", "When the item was created.", |c| {
+                &mut c.created
+            }),
+            column_switch(state, "Permissions", "Unix access mode.", |c| {
+                &mut c.permissions
+            }),
+        ],
+    );
     Box::new(RawView::new(column(22.0)).with_children(vec![
         labeled("Default view", views),
+        labeled("Item size", Box::new(item_size)),
         section(
             "Files & folders",
             vec![preference_row(
@@ -378,7 +419,28 @@ fn browsing(state: &State) -> BoxedWidget {
                 Box::new(hidden),
             )],
         ),
+        columns,
     ]))
+}
+
+fn column_switch(
+    state: &State,
+    title: &str,
+    description: &str,
+    field: fn(&mut crate::config::DetailColumns) -> &mut bool,
+) -> BoxedWidget {
+    let enabled = *field(&mut state.config.get().explorer.columns.clone());
+    let switch = Switch::new(enabled, {
+        let state = state.clone();
+        move || {
+            state.config.update(|config| {
+                let value = field(&mut config.explorer.columns);
+                *value = !*value;
+            });
+            state.persist();
+        }
+    });
+    preference_row(Symbol::Display, title, description, Box::new(switch))
 }
 
 fn view_choice(state: &State, grid: bool, title: &str, hint: &str) -> BoxedWidget {
