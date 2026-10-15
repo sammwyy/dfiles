@@ -1,15 +1,17 @@
 //! The in-process preferences window launched by `dfiles --settings`.
 
-use crate::components::window_chrome;
-use crate::config::{Config, TabPosition};
+use crate::components::{window_chrome, CLEAR};
+use crate::{
+    config::{Config, TabPosition},
+    shortcuts::{Action, Binding},
+};
 use creamui_core::{
     layout::{AlignItems, Dimension, FlexDirection, JustifyContent, LengthPercentage, Style},
     BoxedWidget, LinearGradient, Size, StateStyle, Styled,
 };
 use creamui_reactive::Signal;
+use creamui_render::platform::{Key, KeyEvent, Modifiers};
 use creamui_theme::use_theme;
-#[cfg(test)]
-use creamui_theme::Color;
 use creamui_widgets::{
     tab_styles, CUIWindowDragArea, Icon, RawButton, RawScrollView, RawView, ScrollController,
     SegmentedControl, Switch, Symbol, Tab, TabColors, TabSizing, Tabs, Text,
@@ -19,14 +21,13 @@ use std::{cell::RefCell, rc::Rc};
 mod menu;
 mod preview;
 
-#[cfg(test)]
-const CLEAR: Color = Color::rgba(0, 0, 0, 0);
 const HEADER_HEIGHT: f32 = 64.0;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Page {
     Browsing,
     Layout,
+    Shortcuts,
     About,
 }
 
@@ -39,6 +40,7 @@ pub(crate) struct State {
     icons: crate::icons::Icons,
     menu_open: Signal<bool>,
     reset_open: Signal<bool>,
+    capturing: Signal<bool>,
     pub(crate) window: Rc<RefCell<Option<creamui_render::WindowHandle>>>,
     maximized: Signal<bool>,
 }
@@ -53,6 +55,7 @@ impl State {
             icons: crate::icons::Icons::load(),
             menu_open: Signal::new(false),
             reset_open: Signal::new(false),
+            capturing: Signal::new(false),
             window: Rc::new(RefCell::new(None)),
             maximized: Signal::new(false),
         }
@@ -65,6 +68,41 @@ impl State {
                 .message
                 .set(Some(format!("Couldn't save preferences: {error}"))),
         }
+    }
+    pub(crate) fn key(&self, event: KeyEvent, modifiers: Modifiers) -> bool {
+        if !self.capturing.peek() {
+            return false;
+        }
+        if !event.pressed {
+            return true;
+        }
+        match event.key {
+            Key::Escape => {
+                self.capturing.set(false);
+                self.message.set(None);
+            }
+            Key::Backspace | Key::Delete if modifiers == Modifiers::default() => {
+                self.config.update(|config| {
+                    config
+                        .shortcuts
+                        .insert(Action::Search.id().into(), String::new());
+                });
+                self.capturing.set(false);
+                self.persist();
+            }
+            _ => {
+                if let Some(binding) = Binding::from_event(&event.key, modifiers) {
+                    self.config.update(|config| {
+                        config
+                            .shortcuts
+                            .insert(Action::Search.id().into(), binding.display());
+                    });
+                    self.capturing.set(false);
+                    self.persist();
+                }
+            }
+        }
+        true
     }
 }
 
@@ -81,6 +119,11 @@ pub(crate) fn build(state: &State, size: Size) -> BoxedWidget {
             "Window layout",
             "Arrange your tabs and status information.",
             window_layout(state),
+        ),
+        Page::Shortcuts => (
+            "Keyboard shortcuts",
+            "Choose the keys used by File Explorer.",
+            shortcuts(state),
         ),
         Page::About => (
             "About",
@@ -161,7 +204,7 @@ fn titlebar(state: &State, page: Page, width: f32) -> BoxedWidget {
         insets.end
     };
     let wanted = tab_styles(
-        &["Browsing", "Window layout", "About"],
+        &["Browsing", "Window layout", "Shortcuts", "About"],
         TabSizing::Equal,
         34.0,
         16.0,
@@ -214,11 +257,12 @@ fn navigation(state: &State, active: Page, available_width: f32) -> BoxedWidget 
     let theme = use_theme();
     let labels = [
         "Browsing",
-        if available_width < 360.0 {
+        if available_width < 440.0 {
             "Layout"
         } else {
             "Window layout"
         },
+        "Shortcuts",
         "About",
     ];
     let mut styles = tab_styles(&labels, TabSizing::Equal, 34.0, 16.0);
@@ -228,7 +272,7 @@ fn navigation(state: &State, active: Page, available_width: f32) -> BoxedWidget 
         style.padding = Style::default().padding;
         if let Dimension::Length(width) = style.size.width {
             style.size.width =
-                Dimension::Length(width.min(((available_width - 24.0) / 3.0).max(0.0)));
+                Dimension::Length(width.min(((available_width - 32.0) / 4.0).max(0.0)));
         }
     }
     let mut colors = TabColors::dark();
@@ -248,7 +292,7 @@ fn navigation(state: &State, active: Page, available_width: f32) -> BoxedWidget 
             4.0,
         ),
     );
-    for (index, page) in [Page::Browsing, Page::Layout, Page::About]
+    for (index, page) in [Page::Browsing, Page::Layout, Page::Shortcuts, Page::About]
         .into_iter()
         .enumerate()
     {
@@ -464,6 +508,77 @@ fn window_layout(state: &State) -> BoxedWidget {
             .corner_radius(16.0)
             .child(Box::new(preview::ExplorerPreview::new(&state.icons, config.explorer, 152.0)))),
         controls,
+    ]))
+}
+
+fn shortcuts(state: &State) -> BoxedWidget {
+    let theme = use_theme();
+    let action = Action::Search;
+    let capturing = state.capturing.get();
+    let binding = state
+        .config
+        .get()
+        .shortcuts
+        .get(action.id())
+        .cloned()
+        .unwrap_or_else(|| action.default_binding().into());
+    let text = if capturing {
+        "Press shortcut…".into()
+    } else if binding.is_empty() {
+        "Disabled".into()
+    } else {
+        binding.replace('+', " + ")
+    };
+    let capture = state.clone();
+    let control = RawButton::new(
+        Style {
+            justify_content: Some(JustifyContent::Center),
+            ..fixed(156.0, 34.0)
+        },
+        move || {
+            capture.capturing.set(true);
+            capture.message.set(None);
+        },
+    )
+    .background(if capturing {
+        theme.colors.selection_background
+    } else {
+        CLEAR
+    })
+    .corner_radius(8.0)
+    .hover_style(StateStyle::new().background(theme.colors.surface_hover))
+    .focus_style(StateStyle::new().outline(theme.colors.accent, 1.0))
+    .child(Box::new(Text::secondary(text).font_size(12.0)));
+    let details = RawView::new(Style {
+        flex_grow: 1.0,
+        flex_basis: Dimension::Length(0.0),
+        ..column(3.0)
+    })
+    .with_children(vec![
+        Box::new(Text::new(action.label()).font_size(13.0)),
+        Box::new(Text::secondary("Show or hide search in the current folder.").font_size(11.0)),
+    ]);
+    let shortcut_row = RawView::new(pad(
+        Style {
+            align_items: Some(AlignItems::Center),
+            ..row(12.0)
+        },
+        16.0,
+        12.0,
+    ))
+    .with_children(vec![
+        icon_badge(Symbol::Keyboard),
+        Box::new(details),
+        Box::new(control),
+    ]);
+    let group = RawView::new(column(0.0))
+        .background(theme.colors.surface_elevated)
+        .outline(theme.colors.border, 1.0)
+        .corner_radius(16.0)
+        .child(Box::new(shortcut_row));
+    Box::new(RawView::new(column(22.0)).with_children(vec![
+        labeled("File Explorer", Box::new(group)),
+        Box::new(Text::secondary("Click the shortcut, then press a key combination. Escape cancels; Backspace clears.").font_size(12.0)),
     ]))
 }
 
@@ -686,6 +801,7 @@ mod tests {
                     icons: crate::icons::Icons::load(),
                     menu_open: Signal::new(false),
                     reset_open: Signal::new(false),
+                    capturing: Signal::new(false),
                     window: Rc::new(RefCell::new(None)),
                     maximized: Signal::new(false),
                 };
@@ -705,14 +821,14 @@ mod tests {
                         let scene =
                             Renderer::new().render(build(&state, size), size, &mut recorder);
                         let list = recorder.finish();
-                        // Three tabs, two choices, one switch and the options menu
+                        // Four tabs, two choices, one switch and the options menu
                         // remain available to keyboard navigation on either page.
                         if height >= 560 {
                             assert!(
-                                scene.focus_id_at(6).is_some(),
+                                scene.focus_id_at(7).is_some(),
                                 "all controls visible in {name}/{width}"
                             );
-                            assert!(scene.focus_id_at(7).is_none());
+                            assert!(scene.focus_id_at(8).is_none());
                         } else {
                             assert!(
                                 scene.focus_id_at(4).is_some(),
@@ -780,6 +896,7 @@ mod tests {
                 icons: crate::icons::Icons::load(),
                 menu_open: Signal::new(false),
                 reset_open: Signal::new(false),
+                capturing: Signal::new(false),
                 window: Rc::new(RefCell::new(None)),
                 maximized: Signal::new(false),
             };
@@ -791,7 +908,7 @@ mod tests {
             recorder.begin(760, 640, 1.0, CLEAR, theme.colors);
             let scene = Renderer::new().render(build(&state, size), size, &mut recorder);
             scene
-                .on_key_at(2)
+                .on_key_at(3)
                 .expect("About tab is keyboard accessible")(creamui_core::KeyInput {
                 key: creamui_core::Key::Enter,
                 modifiers: Default::default(),
@@ -801,10 +918,10 @@ mod tests {
             recorder.begin(760, 640, 1.0, CLEAR, theme.colors);
             let scene = Renderer::new().render(build(&state, size), size, &mut recorder);
             assert!(
-                scene.focus_id_at(6).is_some(),
-                "three tabs and four project links"
+                scene.focus_id_at(7).is_some(),
+                "four tabs and four project links"
             );
-            assert!(scene.focus_id_at(7).is_none());
+            assert!(scene.focus_id_at(8).is_none());
             assert_eq!(state.config.peek(), Config::default());
             if let Some(dir) = std::env::var_os("DFILES_SETTINGS_SNAPSHOT_DIR") {
                 let mut raster = Rasterizer::new(760, 640);
@@ -834,6 +951,7 @@ mod tests {
                 icons: crate::icons::Icons::load(),
                 menu_open: Signal::new(false),
                 reset_open: Signal::new(false),
+                capturing: Signal::new(false),
                 window: Rc::new(RefCell::new(None)),
                 maximized: Signal::new(false),
             };
@@ -891,6 +1009,7 @@ mod tests {
                 icons: crate::icons::Icons::load(),
                 menu_open: Signal::new(false),
                 reset_open: Signal::new(false),
+                capturing: Signal::new(false),
                 window: Rc::new(RefCell::new(None)),
                 maximized: Signal::new(false),
             };
@@ -981,6 +1100,7 @@ mod tests {
                 icons: crate::icons::Icons::load(),
                 menu_open: Signal::new(false),
                 reset_open: Signal::new(false),
+                capturing: Signal::new(false),
                 window: Rc::new(RefCell::new(None)),
                 maximized: Signal::new(false),
             };
@@ -1016,8 +1136,8 @@ mod tests {
                         &mut recorder,
                     );
                     let is_client = mode == WindowDecorationMode::Client;
-                    assert!(scene.focus_id_at(if is_client { 5 } else { 2 }).is_some());
-                    assert!(scene.focus_id_at(if is_client { 6 } else { 3 }).is_none());
+                    assert!(scene.focus_id_at(if is_client { 6 } else { 3 }).is_some());
+                    assert!(scene.focus_id_at(if is_client { 7 } else { 4 }).is_none());
                     for offset in [32.0, 68.0, 104.0] {
                         let point = Point {
                             x: size.width - offset,

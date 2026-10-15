@@ -13,6 +13,7 @@ mod icons;
 mod navigation;
 pub mod portal;
 mod settings;
+mod shortcuts;
 mod views;
 pub mod window;
 

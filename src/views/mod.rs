@@ -123,26 +123,27 @@ fn build_scoped(b: &BrowserState, size: Size) -> BoxedWidget {
         },
         vec![
             Box::new(
-                RawView::new(Style {
-                    size: creamui_core::layout::Size {
-                        width: Dimension::Length(sidebar_width),
-                        height: Dimension::Percent(1.0),
-                    },
-                    flex_shrink: 0.0,
-                    ..column(0.0)
-                })
-                .background(t.colors.surface.mix(t.colors.accent, 0.035))
-                .with_children(vec![Box::new(
-                    RawScrollView::controlled(
-                        Style {
-                            flex_grow: 1.0,
-                            ..column(0.0)
+                CUIWindowDragArea::new()
+                    .layout(Style {
+                        size: creamui_core::layout::Size {
+                            width: Dimension::Length(sidebar_width),
+                            height: Dimension::Percent(1.0),
                         },
-                        b.sidebar_scroll.clone(),
-                    )
-                    .scrollbar(false)
-                    .child(sidebar(b, &tab)),
-                )]),
+                        flex_shrink: 0.0,
+                        ..column(0.0)
+                    })
+                    .background(t.colors.surface.mix(t.colors.accent, 0.035))
+                    .with_children(vec![Box::new(
+                        RawScrollView::controlled(
+                            Style {
+                                flex_grow: 1.0,
+                                ..column(0.0)
+                            },
+                            b.sidebar_scroll.clone(),
+                        )
+                        .scrollbar(false)
+                        .child(sidebar(b, &tab)),
+                    )]),
             ),
             Box::new(
                 RawView::new(Style {

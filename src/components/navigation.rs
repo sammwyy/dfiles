@@ -159,6 +159,7 @@ pub(crate) fn toolbar(
     let up = b.clone();
     let address = b.clone();
     let refresh = b.clone();
+    let settings = b.clone();
     let add = b.clone();
     let list = b.clone();
     let grid = b.clone();
@@ -169,13 +170,6 @@ pub(crate) fn toolbar(
     let insets = decoration_insets(content_x, width, row_y, CHROME_HEIGHT, show_client_controls);
     let usable_width = (width - insets.start - insets.end).max(0.0);
     let compact_view_mode = usable_width < 610.0;
-    let search_width = if usable_width < 540.0 {
-        92.0
-    } else if usable_width < 700.0 {
-        132.0
-    } else {
-        210.0
-    };
     let mut items = Vec::new();
     if insets.start > 0.0 {
         items.push(view(fixed(insets.start, 1.0), vec![]));
@@ -200,36 +194,19 @@ pub(crate) fn toolbar(
         // hidden. It replaces the otherwise empty title-strip real estate.
         items.push(Box::new(CUIWindowDragArea::new().layout(fixed(24.0, 32.0))));
     }
-    items.push(Box::new(
-        TextInput::controlled(&tab.address)
-            .layout(Style {
+    if b.search_active.get() {
+        let cancel = b.clone();
+        items.push(Box::new(
+            RawView::new(Style {
                 flex_grow: 1.0,
                 flex_basis: Dimension::Length(0.0),
                 min_size: creamui_core::layout::Size {
                     width: Dimension::Length(if compact_view_mode { 72.0 } else { 96.0 }),
                     height: Dimension::Length(34.0),
                 },
-                ..TextInput::default_style()
+                ..row(8.0)
             })
-            .font_size(12.0)
-            .corner_radius(7.0)
-            .background(t.colors.surface_elevated)
-            .border(t.colors.border, 0.5)
-            .on_submit(move || address.submit_address()),
-    ));
-    items.push(icon_button(b, "refresh", true, false, move || {
-        refresh.edit(Tab::reload);
-        refresh.drives.set(files::drives());
-    }));
-    if b.tabs.get().len() == 1 {
-        items.push(icon_button(b, "plus", true, false, move || add.add_tab()));
-    }
-    items.push(Box::new(
-        RawView::new(pad(fixed(search_width, 34.0), 10.0, 0.0))
-            .background(t.colors.surface_elevated)
-            .corner_radius(7.0)
             .with_children(vec![
-                glyph(b, "search", 15.0, t.colors.text_secondary),
                 Box::new(
                     TextInput::controlled(&tab.search)
                         .layout(Style {
@@ -237,14 +214,44 @@ pub(crate) fn toolbar(
                             flex_basis: Dimension::Length(0.0),
                             ..TextInput::default_style()
                         })
-                        .height(32.0)
                         .font_size(12.0)
-                        .placeholder("Search")
-                        .background(CLEAR)
-                        .border(CLEAR, 0.0),
+                        .placeholder("Search files")
+                        .corner_radius(7.0)
+                        .background(t.colors.surface_elevated)
+                        .border(t.colors.border, 0.5),
                 ),
+                action("Cancel", false, true, move || cancel.cancel_search()),
             ]),
-    ));
+        ));
+    } else {
+        items.push(Box::new(
+            TextInput::controlled(&tab.address)
+                .layout(Style {
+                    flex_grow: 1.0,
+                    flex_basis: Dimension::Length(0.0),
+                    min_size: creamui_core::layout::Size {
+                        width: Dimension::Length(if compact_view_mode { 72.0 } else { 96.0 }),
+                        height: Dimension::Length(34.0),
+                    },
+                    ..TextInput::default_style()
+                })
+                .font_size(12.0)
+                .corner_radius(7.0)
+                .background(t.colors.surface_elevated)
+                .border(t.colors.border, 0.5)
+                .on_submit(move || address.submit_address()),
+        ));
+    }
+    items.push(icon_button(b, "refresh", true, false, move || {
+        refresh.edit(Tab::reload);
+        refresh.drives.set(files::drives());
+    }));
+    items.push(icon_button(b, "settings", true, false, move || {
+        settings.open_settings()
+    }));
+    if b.tabs.get().len() == 1 {
+        items.push(icon_button(b, "plus", true, false, move || add.add_tab()));
+    }
     if tab.location() != &Location::Home {
         items.push(view_mode_switcher(
             b,
@@ -262,20 +269,21 @@ pub(crate) fn toolbar(
     } else if insets.end > 0.0 {
         items.push(view(fixed(insets.end, 1.0), vec![]));
     }
-    view(
-        pad(
-            Style {
-                size: creamui_core::layout::Size {
-                    width: Dimension::Percent(1.0),
-                    height: Dimension::Length(CHROME_HEIGHT),
+    Box::new(
+        CUIWindowDragArea::new()
+            .layout(pad(
+                Style {
+                    size: creamui_core::layout::Size {
+                        width: Dimension::Percent(1.0),
+                        height: Dimension::Length(CHROME_HEIGHT),
+                    },
+                    flex_shrink: 0.0,
+                    ..row(4.0)
                 },
-                flex_shrink: 0.0,
-                ..row(4.0)
-            },
-            12.0,
-            0.0,
-        ),
-        items,
+                12.0,
+                0.0,
+            ))
+            .with_children(items),
     )
 }
 

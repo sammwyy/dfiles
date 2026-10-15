@@ -417,7 +417,6 @@ dependencies = [
 [[package]]
 name = "creamui-core"
 version = "0.2.0"
-source = "git+https://github.com/sammwyy/creamui.git?rev=9a16176b697ff092955c91dcb3616f65ba47f587#9a16176b697ff092955c91dcb3616f65ba47f587"
 dependencies = [
  "bitflags 2.13.2",
  "creamui-reactive",
@@ -428,7 +427,6 @@ dependencies = [
 [[package]]
 name = "creamui-fonts"
 version = "0.2.0"
-source = "git+https://github.com/sammwyy/creamui.git?rev=9a16176b697ff092955c91dcb3616f65ba47f587#9a16176b697ff092955c91dcb3616f65ba47f587"
 dependencies = [
  "creamui-reactive",
  "log",
@@ -440,7 +438,6 @@ dependencies = [
 [[package]]
 name = "creamui-image"
 version = "0.2.0"
-source = "git+https://github.com/sammwyy/creamui.git?rev=9a16176b697ff092955c91dcb3616f65ba47f587#9a16176b697ff092955c91dcb3616f65ba47f587"
 dependencies = [
  "creamui-core",
  "creamui-theme",
@@ -451,7 +448,6 @@ dependencies = [
 [[package]]
 name = "creamui-platform"
 version = "0.2.0"
-source = "git+https://github.com/sammwyy/creamui.git?rev=9a16176b697ff092955c91dcb3616f65ba47f587#9a16176b697ff092955c91dcb3616f65ba47f587"
 dependencies = [
  "jni",
  "libc",
@@ -473,12 +469,10 @@ dependencies = [
 [[package]]
 name = "creamui-reactive"
 version = "0.2.0"
-source = "git+https://github.com/sammwyy/creamui.git?rev=9a16176b697ff092955c91dcb3616f65ba47f587#9a16176b697ff092955c91dcb3616f65ba47f587"
 
 [[package]]
 name = "creamui-render"
 version = "0.2.0"
-source = "git+https://github.com/sammwyy/creamui.git?rev=9a16176b697ff092955c91dcb3616f65ba47f587#9a16176b697ff092955c91dcb3616f65ba47f587"
 dependencies = [
  "bytemuck",
  "creamui-core",
@@ -506,7 +500,6 @@ dependencies = [
 [[package]]
 name = "creamui-theme"
 version = "0.2.0"
-source = "git+https://github.com/sammwyy/creamui.git?rev=9a16176b697ff092955c91dcb3616f65ba47f587#9a16176b697ff092955c91dcb3616f65ba47f587"
 dependencies = [
  "creamui-fonts",
  "creamui-reactive",
@@ -515,9 +508,9 @@ dependencies = [
 [[package]]
 name = "creamui-theme-loader"
 version = "0.2.0"
-source = "git+https://github.com/sammwyy/creamui.git?rev=9a16176b697ff092955c91dcb3616f65ba47f587#9a16176b697ff092955c91dcb3616f65ba47f587"
 dependencies = [
  "creamui-theme",
+ "delib",
  "serde",
  "toml",
 ]
@@ -525,7 +518,6 @@ dependencies = [
 [[package]]
 name = "creamui-widgets"
 version = "0.2.0"
-source = "git+https://github.com/sammwyy/creamui.git?rev=9a16176b697ff092955c91dcb3616f65ba47f587#9a16176b697ff092955c91dcb3616f65ba47f587"
 dependencies = [
  "arboard",
  "creamui-core",

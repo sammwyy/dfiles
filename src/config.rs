@@ -2,12 +2,13 @@
 
 use delib::xdg::XdgPaths;
 use serde::{Deserialize, Serialize};
-use std::{fs, io, path::PathBuf};
+use std::{collections::BTreeMap, fs, io, path::PathBuf};
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct Config {
     pub explorer: ExplorerConfig,
+    pub shortcuts: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -35,6 +36,9 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             explorer: ExplorerConfig::default(),
+            shortcuts: [("search".into(), "Ctrl+Shift+F".into())]
+                .into_iter()
+                .collect(),
         }
     }
 }
@@ -100,6 +104,7 @@ mod tests {
         assert!(!config.explorer.default_grid_view);
         assert_eq!(config.explorer.tab_position, TabPosition::Top);
         assert!(config.explorer.show_statusbar);
+        assert_eq!(config.shortcuts.get("search"), Some(&"Ctrl+Shift+F".into()));
         assert!(toml::to_string(&config).unwrap().contains("[explorer]"));
     }
 

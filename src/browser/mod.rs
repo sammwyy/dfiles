@@ -8,7 +8,10 @@ use crate::{
     window::{WindowMode, WindowRequest},
 };
 use creamui_reactive::{batch, Signal};
-use creamui_render::WindowHandle;
+use creamui_render::{
+    platform::{KeyEvent, Modifiers},
+    WindowHandle,
+};
 use creamui_widgets::{ScrollController, TextController};
 use std::{
     cell::RefCell,
@@ -39,6 +42,7 @@ pub(crate) struct BrowserState {
     pub(crate) maximized: Signal<bool>,
     pub(crate) result: Arc<Mutex<Option<PortalSelection>>>,
     pub(crate) explorer: ExplorerConfig,
+    pub(crate) search_active: Signal<bool>,
 }
 impl BrowserState {
     pub(crate) fn new(request: WindowRequest) -> Self {
@@ -91,7 +95,58 @@ impl BrowserState {
             maximized: Signal::new(false),
             result: Arc::new(Mutex::new(None)),
             explorer,
+            search_active: Signal::new(false),
         }
+    }
+    pub(crate) fn toggle_search(&self) {
+        let active = !self.search_active.peek();
+        self.search_active.set(active);
+        if active {
+            if let Some(window) = self.window.borrow().as_ref() {
+                window.focus_text_input();
+            }
+        } else {
+            self.edit(|tab| tab.search.set_value(""));
+        }
+    }
+    pub(crate) fn cancel_search(&self) {
+        self.search_active.set(false);
+        self.edit(|tab| tab.search.set_value(""));
+    }
+    pub(crate) fn close_search_if_empty(&self) {
+        if self.search_active.peek() && self.tab().search.peek().trim().is_empty() {
+            self.cancel_search();
+        }
+    }
+    pub(crate) fn open_settings(&self) {
+        match std::env::current_exe().and_then(|exe| Command::new(exe).arg("--settings").spawn()) {
+            Ok(mut child) => {
+                std::thread::spawn(move || {
+                    let _ = child.wait();
+                });
+            }
+            Err(error) => self
+                .message
+                .set(Some(format!("Couldn't open settings: {error}"))),
+        }
+    }
+    pub(crate) fn key(&self, event: KeyEvent, modifiers: Modifiers) -> bool {
+        if !event.pressed {
+            return false;
+        }
+        let action = crate::shortcuts::Action::Search;
+        let binding = crate::config::Config::load()
+            .shortcuts
+            .get(action.id())
+            .cloned()
+            .unwrap_or_else(|| action.default_binding().into());
+        if crate::shortcuts::Binding::parse(&binding)
+            .is_ok_and(|binding| binding.matches(&event.key, modifiers))
+        {
+            self.toggle_search();
+            return true;
+        }
+        false
     }
     pub(crate) fn tab(&self) -> Tab {
         self.tabs.get()[self.active.get()].clone()

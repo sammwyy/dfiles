@@ -23,14 +23,14 @@ mime_guess = "2"
 serde = { version = "1", features = ["derive"] }
 toml = "0.9"
 delib = { version = "0.1.0", path = "../delib" }
-creamui-image = { git = "https://github.com/sammwyy/creamui.git", rev = "9a16176b697ff092955c91dcb3616f65ba47f587", features = ["svg"] }
-creamui-core = { git = "https://github.com/sammwyy/creamui.git", rev = "9a16176b697ff092955c91dcb3616f65ba47f587" }
-creamui-reactive = { git = "https://github.com/sammwyy/creamui.git", rev = "9a16176b697ff092955c91dcb3616f65ba47f587" }
-creamui-render = { git = "https://github.com/sammwyy/creamui.git", rev = "9a16176b697ff092955c91dcb3616f65ba47f587", features = ["platform-wayland", "system-theme", "platform-window-integration-blair", "platform-blur-blair", "platform-blur-kwin"] }
-creamui-theme = { git = "https://github.com/sammwyy/creamui.git", rev = "9a16176b697ff092955c91dcb3616f65ba47f587" }
-creamui-theme-loader = { git = "https://github.com/sammwyy/creamui.git", rev = "9a16176b697ff092955c91dcb3616f65ba47f587" }
-creamui-fonts = { git = "https://github.com/sammwyy/creamui.git", rev = "9a16176b697ff092955c91dcb3616f65ba47f587" }
-creamui-widgets = { git = "https://github.com/sammwyy/creamui.git", rev = "9a16176b697ff092955c91dcb3616f65ba47f587" }
+creamui-image = { path = "../creamui/crates/image", features = ["svg"] }
+creamui-core = { path = "../creamui/crates/core" }
+creamui-reactive = { path = "../creamui/crates/reactive" }
+creamui-render = { path = "../creamui/crates/render", features = ["platform-wayland", "system-theme", "platform-window-integration-blair", "platform-blur-blair", "platform-blur-kwin"] }
+creamui-theme = { path = "../creamui/crates/theme" }
+creamui-theme-loader = { path = "../creamui/crates/theme-loader" }
+creamui-fonts = { path = "../creamui/crates/fonts" }
+creamui-widgets = { path = "../creamui/crates/widgets" }
 
 [dev-dependencies]
 tempfile = "3"

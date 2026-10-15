@@ -38,11 +38,15 @@ pub fn show_window(request: WindowRequest) -> Option<crate::portal::PortalSelect
     AppBuilder::new()
         .on_started(move |app| {
             let ready_window = window.clone();
+            let keys = browser.clone();
+            let blur = browser.clone();
             app.append_window(
                 options,
                 Color::rgba(0, 0, 0, 0),
                 move |handle| {
                     crate::components::window_chrome::request_hybrid(&handle);
+                    handle.on_keyboard_input(move |event, modifiers| keys.key(event, modifiers));
+                    handle.on_focus_lost(move || blur.close_search_if_empty());
                     *ready_window.borrow_mut() = Some(handle);
                 },
                 move |size| crate::views::build(&browser, size),
@@ -73,11 +77,13 @@ pub fn show_settings() {
     AppBuilder::new()
         .on_started(move |app| {
             let ready_window = window.clone();
+            let keys = settings.clone();
             app.append_window(
                 options,
                 Color::rgba(0, 0, 0, 0),
                 move |handle| {
                     crate::components::window_chrome::request_hybrid(&handle);
+                    handle.on_keyboard_input(move |event, modifiers| keys.key(event, modifiers));
                     *ready_window.borrow_mut() = Some(handle);
                 },
                 move |size| crate::settings::build(&settings, size),

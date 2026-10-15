@@ -298,13 +298,17 @@ fn native_layout_and_portal_previews() {
         };
         let scene = render(&browser, size, "home");
         assert!(scene.window_drag_at(Point { x: 365.0, y: 26.0 }).is_some());
+        assert!(
+            scene.window_drag_at(Point { x: 12.0, y: 700.0 }).is_some(),
+            "the empty sidebar drags the window"
+        );
         assert!(scene.window_drag_at(Point { x: 600.0, y: 26.0 }).is_none());
         assert!(
             scene.hit_test(Point { x: 1090.0, y: 28.0 }).is_none(),
             "compositor owns hybrid controls"
         );
         scene
-            .hit_test(Point { x: 740.0, y: 26.0 })
+            .hit_test(Point { x: 950.0, y: 26.0 })
             .expect("new tab button")();
         assert_eq!(browser.tabs.peek().len(), 2);
         browser.explorer.tab_position = crate::config::TabPosition::Bottom;
