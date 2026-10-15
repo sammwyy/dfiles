@@ -4,60 +4,7 @@ use crate::views::directory::visible_entries;
 pub(crate) const CHROME_HEIGHT: f32 = 54.0;
 pub(crate) const COMPACT_STATUS_WIDTH: f32 = 210.0;
 
-#[derive(Default)]
-struct DecorationInsets {
-    start: f32,
-    end: f32,
-}
-
-/// Returns the space in this row that belongs to the window manager.
-///
-/// Hybrid decorations are expressed in window coordinates, while the browser
-/// chrome begins after the sidebar.  Reserving the intersecting side here
-/// keeps controls out from underneath compositor buttons regardless of which
-/// side the compositor puts them on.
-fn decoration_insets(
-    content_x: f32,
-    width: f32,
-    row_y: f32,
-    row_height: f32,
-    client_controls: bool,
-) -> DecorationInsets {
-    let decorations = creamui_render::use_window_decorations();
-    if decorations.mode == WindowDecorationMode::Client {
-        return if client_controls {
-            DecorationInsets {
-                end: 108.0,
-                ..Default::default()
-            }
-        } else {
-            DecorationInsets::default()
-        };
-    }
-    let controls = decorations.controls;
-    let controls_top = controls.y as f32;
-    let controls_bottom = controls_top + controls.height as f32;
-    let overlaps_row = controls.width > 0
-        && controls.height > 0
-        && controls_top < row_y + row_height
-        && controls_bottom > row_y;
-    if !overlaps_row {
-        return DecorationInsets::default();
-    }
-    let right = content_x + width;
-    let center = controls.x as f32 + controls.width as f32 / 2.0;
-    if center <= content_x + width / 2.0 {
-        DecorationInsets {
-            start: (controls.x as f32 + controls.width as f32 + 8.0 - content_x).clamp(0.0, width),
-            ..Default::default()
-        }
-    } else {
-        DecorationInsets {
-            end: (right - controls.x as f32 + 8.0).clamp(0.0, width),
-            ..Default::default()
-        }
-    }
-}
+use super::window_chrome::{self, insets as decoration_insets};
 
 pub(crate) fn tab_bar(
     b: &BrowserState,
@@ -172,25 +119,11 @@ pub(crate) fn tab_bar(
         },
         ..row(0.0)
     })));
-    if show_client_controls
-        && creamui_render::use_window_decorations().mode == WindowDecorationMode::Client
+    if let Some(controls) = show_client_controls
+        .then(|| window_chrome::client_controls(&b.icons, &b.window, &b.maximized))
+        .flatten()
     {
-        for (index, icon) in ["minimize", "maximize", "close"].iter().enumerate() {
-            let state = b.clone();
-            children.push(icon_button(b, icon, true, false, move || {
-                if let Some(handle) = state.window.borrow().as_ref() {
-                    match index {
-                        0 => handle.minimize(),
-                        1 => {
-                            let next = !state.maximized.peek();
-                            handle.set_maximized(next);
-                            state.maximized.set(next);
-                        }
-                        _ => handle.close(),
-                    }
-                }
-            }));
-        }
+        children.push(controls);
     } else if insets.end > 0.0 {
         children.push(view(fixed(insets.end, 1.0), vec![]));
     }
@@ -233,7 +166,7 @@ pub(crate) fn toolbar(
         Location::Directory(p) => p.parent().map(Path::to_path_buf),
         _ => None,
     };
-    let insets = decoration_insets(content_x, width, row_y, CHROME_HEIGHT, false);
+    let insets = decoration_insets(content_x, width, row_y, CHROME_HEIGHT, show_client_controls);
     let usable_width = (width - insets.start - insets.end).max(0.0);
     let compact_view_mode = usable_width < 610.0;
     let search_width = if usable_width < 540.0 {
@@ -321,25 +254,11 @@ pub(crate) fn toolbar(
             grid,
         ));
     }
-    if show_client_controls
-        && creamui_render::use_window_decorations().mode == WindowDecorationMode::Client
+    if let Some(controls) = show_client_controls
+        .then(|| window_chrome::client_controls(&b.icons, &b.window, &b.maximized))
+        .flatten()
     {
-        for (index, icon) in ["minimize", "maximize", "close"].iter().enumerate() {
-            let state = b.clone();
-            items.push(icon_button(b, icon, true, false, move || {
-                if let Some(handle) = state.window.borrow().as_ref() {
-                    match index {
-                        0 => handle.minimize(),
-                        1 => {
-                            let next = !state.maximized.peek();
-                            handle.set_maximized(next);
-                            state.maximized.set(next);
-                        }
-                        _ => handle.close(),
-                    }
-                }
-            }));
-        }
+        items.push(controls);
     } else if insets.end > 0.0 {
         items.push(view(fixed(insets.end, 1.0), vec![]));
     }

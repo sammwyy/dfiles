@@ -1,5 +1,6 @@
 //! The in-process preferences window launched by `dfiles --settings`.
 
+use crate::components::window_chrome;
 use crate::config::{Config, TabPosition};
 use creamui_core::{
     layout::{AlignItems, Dimension, FlexDirection, JustifyContent, LengthPercentage, Style},
@@ -11,6 +12,7 @@ use creamui_widgets::{
     tab_styles, CUIWindowDragArea, Icon, RawButton, RawScrollView, RawView, ScrollController,
     SegmentedControl, Switch, Symbol, Tab, TabColors, TabSizing, Tabs, Text,
 };
+use std::{cell::RefCell, rc::Rc};
 
 mod menu;
 mod preview;
@@ -20,7 +22,6 @@ const CLEAR: Color = Color::rgba(0, 0, 0, 0);
 const BROWSING_COLOR: Color = Color::rgb(47, 142, 210);
 const LAYOUT_COLOR: Color = Color::rgb(126, 104, 211);
 const HEADER_HEIGHT: f32 = 64.0;
-const WINDOW_CONTROLS_SPACE: f32 = 128.0;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Page {
@@ -37,6 +38,8 @@ pub(crate) struct State {
     icons: crate::icons::Icons,
     menu_open: Signal<bool>,
     reset_open: Signal<bool>,
+    pub(crate) window: Rc<RefCell<Option<creamui_render::WindowHandle>>>,
+    maximized: Signal<bool>,
 }
 
 impl State {
@@ -49,6 +52,8 @@ impl State {
             icons: crate::icons::Icons::load(),
             menu_open: Signal::new(false),
             reset_open: Signal::new(false),
+            window: Rc::new(RefCell::new(None)),
+            maximized: Signal::new(false),
         }
     }
 
@@ -140,26 +145,19 @@ pub(crate) fn build(state: &State, size: Size) -> BoxedWidget {
 }
 
 fn titlebar(state: &State, page: Page, width: f32) -> BoxedWidget {
-    let mut start = 24.0_f32;
-    let mut end = WINDOW_CONTROLS_SPACE;
-    // Keep room for controls even before the compositor reports decorations.
-    // Respect a larger injected rectangle, including controls placed on the left.
-    if let Some(decorations) =
-        creamui_reactive::try_use_context::<Signal<creamui_render::WindowDecorations>>()
-    {
-        let controls = decorations.get().controls;
-        if controls.width > 0
-            && controls.height > 0
-            && (controls.y as f32) < HEADER_HEIGHT
-            && controls.y + controls.height > 0
-        {
-            if controls.x as f32 + controls.width as f32 / 2.0 < width / 2.0 {
-                start = start.max(controls.x as f32 + controls.width as f32 + 8.0);
-            } else {
-                end = end.max(width - controls.x as f32 + 8.0);
-            }
-        }
-    }
+    let insets = window_chrome::insets(0.0, width, 0.0, HEADER_HEIGHT, true);
+    let controls = window_chrome::client_controls(&state.icons, &state.window, &state.maximized);
+    let start = 24.0_f32.max(insets.start);
+    let end = if controls.is_some() {
+        24.0
+    } else {
+        24.0_f32.max(insets.end)
+    };
+    let controls_width = if controls.is_some() {
+        window_chrome::CONTROLS_WIDTH + 12.0
+    } else {
+        0.0
+    };
     let style = Style {
         size: creamui_core::layout::Size {
             width: Dimension::Percent(1.0),
@@ -175,11 +173,24 @@ fn titlebar(state: &State, page: Page, width: f32) -> BoxedWidget {
         },
         ..row(0.0)
     };
-    Box::new(CUIWindowDragArea::new().layout(style).child(navigation(
+    let mut children = vec![navigation(
         state,
         page,
-        (width - start - end).max(0.0),
-    )))
+        (width - start - end - controls_width).max(0.0),
+    )];
+    if let Some(controls) = controls {
+        children.push(Box::new(RawView::new(Style {
+            flex_grow: 1.0,
+            flex_basis: Dimension::Length(0.0),
+            ..row(0.0)
+        })));
+        children.push(controls);
+    }
+    Box::new(
+        CUIWindowDragArea::new()
+            .layout(style)
+            .with_children(children),
+    )
 }
 
 fn navigation(state: &State, active: Page, available_width: f32) -> BoxedWidget {
@@ -640,6 +651,8 @@ mod tests {
                     icons: crate::icons::Icons::load(),
                     menu_open: Signal::new(false),
                     reset_open: Signal::new(false),
+                    window: Rc::new(RefCell::new(None)),
+                    maximized: Signal::new(false),
                 };
                 for (width, height) in [(760, 560), (480, 420), (960, 640)] {
                     let size = Size {
@@ -688,7 +701,7 @@ mod tests {
                         }
                         assert!(scene.window_drag_at(Point { x: 80.0, y: 32.0 }).is_none());
                         assert!(scene.window_drag_at(Point { x: 32.0, y: 100.0 }).is_none());
-                        for x in (width - WINDOW_CONTROLS_SPACE as u32..width).step_by(8) {
+                        for x in (width - 128..width).step_by(8) {
                             assert!(
                                 scene
                                     .hit_test(Point {
@@ -740,6 +753,8 @@ mod tests {
                 icons: crate::icons::Icons::load(),
                 menu_open: Signal::new(false),
                 reset_open: Signal::new(false),
+                window: Rc::new(RefCell::new(None)),
+                maximized: Signal::new(false),
             };
             for (x, width, tab_x) in [(240, 224, 180.0), (8, 112, 280.0)] {
                 decorations.set(WindowDecorations {
@@ -795,6 +810,8 @@ mod tests {
                 icons: crate::icons::Icons::load(),
                 menu_open: Signal::new(false),
                 reset_open: Signal::new(false),
+                window: Rc::new(RefCell::new(None)),
+                maximized: Signal::new(false),
             };
             let size = Size {
                 width: 760.0,
@@ -863,6 +880,109 @@ mod tests {
                 config.explorer.show_statusbar = false;
             });
             render("layout-grid-bottom");
+        });
+    }
+
+    #[test]
+    fn settings_draw_client_controls_only_for_client_decorations() {
+        use creamui_render::{CompositorControls, WindowDecorationMode, WindowDecorations};
+        creamui_reactive::with_context_scope(|| {
+            let theme = Theme::light();
+            creamui_reactive::provide_context(ThemeProvider::new(theme));
+            creamui_reactive::provide_context(WindowDragHandle::new(|| {}));
+            let decorations = Signal::new(WindowDecorations::default());
+            creamui_reactive::provide_context(decorations.clone());
+            let state = State {
+                config: Signal::new(Config::default()),
+                page: Signal::new(Page::Browsing),
+                message: Signal::new(None),
+                scroll: ScrollController::new(0.0),
+                icons: crate::icons::Icons::load(),
+                menu_open: Signal::new(false),
+                reset_open: Signal::new(false),
+                window: Rc::new(RefCell::new(None)),
+                maximized: Signal::new(false),
+            };
+            for width in [480, 760, 960] {
+                for mode in [
+                    WindowDecorationMode::Pending,
+                    WindowDecorationMode::Client,
+                    WindowDecorationMode::Hybrid,
+                    WindowDecorationMode::Server,
+                    WindowDecorationMode::None,
+                    WindowDecorationMode::Client,
+                ] {
+                    // Retain an overlay rectangle while changing ownership:
+                    // only Hybrid may reserve this compositor-owned region.
+                    decorations.set(WindowDecorations {
+                        mode,
+                        controls: CompositorControls {
+                            x: width - 128,
+                            y: 14,
+                            width: 112,
+                            height: 28,
+                        },
+                    });
+                    let size = Size {
+                        width: width as f32,
+                        height: HEADER_HEIGHT,
+                    };
+                    let mut recorder = SceneRecorder::new();
+                    recorder.begin(width as u32, HEADER_HEIGHT as u32, 1.0, CLEAR, theme.colors);
+                    let scene = Renderer::new().render(
+                        titlebar(&state, Page::Browsing, size.width),
+                        size,
+                        &mut recorder,
+                    );
+                    let is_client = mode == WindowDecorationMode::Client;
+                    assert!(scene.focus_id_at(if is_client { 4 } else { 1 }).is_some());
+                    assert!(scene.focus_id_at(if is_client { 5 } else { 2 }).is_none());
+                    for offset in [32.0, 68.0, 104.0] {
+                        let point = Point {
+                            x: size.width - offset,
+                            y: 32.0,
+                        };
+                        assert_eq!(
+                            scene.hit_test(point).is_some(),
+                            is_client,
+                            "{mode:?}/{width}/{offset}"
+                        );
+                        if is_client {
+                            assert!(scene.window_drag_at(point).is_none());
+                        }
+                    }
+                    assert!(scene.window_drag_at(Point { x: 300.0, y: 32.0 }).is_some());
+                    if width == 760 {
+                        if let Some(directory) = std::env::var_os("DFILES_SETTINGS_SNAPSHOT_DIR") {
+                            let mut recorder = SceneRecorder::new();
+                            recorder.begin(760, 560, 1.0, CLEAR, theme.colors);
+                            Renderer::new().render(
+                                build(
+                                    &state,
+                                    Size {
+                                        width: 760.0,
+                                        height: 560.0,
+                                    },
+                                ),
+                                Size {
+                                    width: 760.0,
+                                    height: 560.0,
+                                },
+                                &mut recorder,
+                            );
+                            let mut raster = Rasterizer::new(760, 560);
+                            raster.render(&recorder.finish(), &Damage::Full);
+                            raster
+                                .pixmap()
+                                .save_png(
+                                    std::path::PathBuf::from(directory)
+                                        .join(format!("decorations-{mode:?}.png")),
+                                )
+                                .unwrap();
+                        }
+                    }
+                }
+            }
         });
     }
 }

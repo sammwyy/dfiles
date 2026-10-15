@@ -21,6 +21,7 @@ pub(crate) use std::{path::Path, rc::Rc};
 pub(crate) mod navigation;
 pub(crate) mod portal_footer;
 pub(crate) mod sidebar;
+pub(crate) mod window_chrome;
 pub(crate) const CLEAR: Color = Color::rgba(0, 0, 0, 0);
 
 pub(crate) fn row(gap: f32) -> Style {

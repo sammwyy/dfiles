@@ -444,3 +444,71 @@ fn native_layout_and_portal_previews() {
         );
     });
 }
+
+#[test]
+fn browser_draws_one_set_of_client_controls_for_single_and_multiple_tabs() {
+    creamui_reactive::with_context_scope(|| {
+        let theme = Theme::light();
+        creamui_reactive::provide_context(ThemeProvider::new(theme));
+        let decorations = Signal::new(WindowDecorations::default());
+        creamui_reactive::provide_context(decorations.clone());
+        let mut browser = BrowserState::new(WindowRequest::manager(None));
+        browser.explorer = crate::config::ExplorerConfig::default();
+        let size = Size {
+            width: 1120.0,
+            height: 760.0,
+        };
+        for tab_count in [1, 2] {
+            if tab_count == 2 {
+                browser.add_tab();
+            }
+            for position in [
+                crate::config::TabPosition::Top,
+                crate::config::TabPosition::Bottom,
+            ] {
+                browser.explorer.tab_position = position;
+                let mut client_focus_count = 0;
+                for mode in [
+                    WindowDecorationMode::Client,
+                    WindowDecorationMode::Hybrid,
+                    WindowDecorationMode::Server,
+                    WindowDecorationMode::Pending,
+                    WindowDecorationMode::None,
+                ] {
+                    decorations.set(WindowDecorations {
+                        mode,
+                        controls: CompositorControls {
+                            x: 992,
+                            y: 14,
+                            width: 112,
+                            height: 28,
+                        },
+                    });
+                    let mut recorder = SceneRecorder::new();
+                    recorder.begin(1120, 760, 1.0, Color::rgba(0, 0, 0, 0), theme.colors);
+                    let scene =
+                        Renderer::new().render(view::build(&browser, size), size, &mut recorder);
+                    let focus_count = (0..)
+                        .take_while(|index| scene.focus_id_at(*index).is_some())
+                        .count();
+                    if mode == WindowDecorationMode::Client {
+                        client_focus_count = focus_count;
+                        for offset in [28.0, 64.0, 100.0] {
+                            assert!(
+                                scene
+                                    .hit_test(Point {
+                                        x: size.width - offset,
+                                        y: 27.0
+                                    })
+                                    .is_some(),
+                                "client control missing: {tab_count}/{position:?}/{offset}"
+                            );
+                        }
+                    } else {
+                        assert_eq!(focus_count + 3, client_focus_count, "{mode:?}/{tab_count}/{position:?}: controls must appear exactly once in Client mode");
+                    }
+                }
+            }
+        }
+    });
+}

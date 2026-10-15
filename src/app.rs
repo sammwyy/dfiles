@@ -1,7 +1,5 @@
 use crate::{browser::BrowserState, window::WindowRequest};
-use creamui_render::{
-    AppBuilder, AppHandle, BlurRegion, CompositorIntegrationRequest, WindowHandle, WindowOptions,
-};
+use creamui_render::{AppBuilder, AppHandle, BlurRegion, WindowHandle, WindowOptions};
 use creamui_theme::{Color, Theme};
 use dbus::{blocking::Connection, message::MatchRule};
 use std::{
@@ -31,6 +29,7 @@ pub fn show_window(request: WindowRequest) -> Option<crate::portal::PortalSelect
         width: 1120,
         height: 760,
         transparent: true,
+        decorations: true,
         blur: Some(BlurRegion::Window),
         theme: load_system_theme(),
         ..Default::default()
@@ -43,7 +42,7 @@ pub fn show_window(request: WindowRequest) -> Option<crate::portal::PortalSelect
                 options,
                 Color::rgba(0, 0, 0, 0),
                 move |handle| {
-                    handle.set_compositor_integration(Some(CompositorIntegrationRequest::Hybrid));
+                    crate::components::window_chrome::request_hybrid(&handle);
                     *ready_window.borrow_mut() = Some(handle);
                 },
                 move |size| crate::views::build(&browser, size),
@@ -59,25 +58,31 @@ pub fn show_window(request: WindowRequest) -> Option<crate::portal::PortalSelect
 pub fn show_settings() {
     ensure_wayland_display();
     let settings = crate::settings::State::load();
+    let window = settings.window.clone();
     let options = WindowOptions {
         title: "File Explorer Settings".into(),
         width: 760,
         height: 560,
         transparent: true,
+        decorations: true,
         blur: Some(BlurRegion::Window),
         theme: load_system_theme(),
         ..Default::default()
     };
+    let theme_events = Arc::new(Mutex::new(listen_for_theme_reloads()));
     AppBuilder::new()
         .on_started(move |app| {
+            let ready_window = window.clone();
             app.append_window(
                 options,
                 Color::rgba(0, 0, 0, 0),
-                |handle| {
-                    handle.set_compositor_integration(Some(CompositorIntegrationRequest::Hybrid));
+                move |handle| {
+                    crate::components::window_chrome::request_hybrid(&handle);
+                    *ready_window.borrow_mut() = Some(handle);
                 },
                 move |size| crate::settings::build(&settings, size),
             );
+            watch_theme_reloads(app, theme_events, window);
         })
         .run();
 }
