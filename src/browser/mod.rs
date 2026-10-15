@@ -224,7 +224,7 @@ impl BrowserState {
             self.message
                 .set(Some("This file is no longer available.".into()));
         } else if self.context.is_manager() {
-            match Command::new("xdg-open").arg(&path).spawn() {
+            match open_with_default_application(&path) {
                 Ok(_) => self.remember(path),
                 Err(error) => self
                     .message
@@ -340,6 +340,29 @@ impl BrowserState {
             })
             .cloned()
     }
+}
+
+/// Opens a file through the desktop's MIME Apps association, rather than
+/// delegating policy to an opaque `xdg-open` subprocess.
+fn open_with_default_application(path: &Path) -> Result<(), String> {
+    let mime = mime_guess::from_path(path).first_or_octet_stream();
+    let mime = mime.essence_str();
+    let (entry, command) = delib::mimeapps::MimeApps::default()
+        .command_for(mime, &[path.to_path_buf()])
+        .ok_or_else(|| format!("No default application is associated with {mime}."))?;
+    let (program, arguments) = command
+        .split_first()
+        .ok_or_else(|| "The selected application has an empty launch command.".to_owned())?;
+    Command::new(program)
+        .args(arguments)
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| {
+            format!(
+                "Could not start {}: {error}",
+                entry.name(None).unwrap_or(program)
+            )
+        })
 }
 pub(crate) fn valid_filename(name: &str) -> bool {
     !name.trim().is_empty() && ![".", ".."].contains(&name) && !name.contains(['/', '\0'])
