@@ -1,5 +1,6 @@
 //! Reusable filesystem browser shared by the app and its portal backend.
 
+mod about;
 pub mod app;
 mod browser;
 pub mod cli;

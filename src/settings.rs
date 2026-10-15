@@ -27,6 +27,7 @@ const HEADER_HEIGHT: f32 = 64.0;
 enum Page {
     Browsing,
     Layout,
+    About,
 }
 
 #[derive(Clone)]
@@ -83,14 +84,24 @@ pub(crate) fn build(state: &State, size: Size) -> BoxedWidget {
             "desktop",
             window_layout(state),
         ),
+        Page::About => (
+            "About",
+            "File Explorer",
+            "folder-large",
+            crate::about::build("File Explorer"),
+        ),
     };
-    let mut document_children = vec![
-        page_heading(state, title, description, icon),
-        body,
-        Box::new(
-            Text::secondary("Changes are saved automatically for new windows.").font_size(12.0),
-        ) as BoxedWidget,
-    ];
+    let mut document_children = if page == Page::About {
+        vec![body]
+    } else {
+        vec![
+            page_heading(state, title, description, icon),
+            body,
+            Box::new(
+                Text::secondary("Changes are saved automatically for new windows.").font_size(12.0),
+            ) as BoxedWidget,
+        ]
+    };
     if let Some(message) = state.message.get() {
         document_children.push(Box::new(
             Text::new(message)
@@ -147,55 +158,72 @@ pub(crate) fn build(state: &State, size: Size) -> BoxedWidget {
 fn titlebar(state: &State, page: Page, width: f32) -> BoxedWidget {
     let insets = window_chrome::insets(0.0, width, 0.0, HEADER_HEIGHT, true);
     let controls = window_chrome::client_controls(&state.icons, &state.window, &state.maximized);
-    let start = 24.0_f32.max(insets.start);
     let end = if controls.is_some() {
-        24.0
+        128.0
     } else {
-        24.0_f32.max(insets.end)
+        insets.end
     };
-    let controls_width = if controls.is_some() {
-        window_chrome::CONTROLS_WIDTH + 12.0
-    } else {
-        0.0
-    };
-    let style = Style {
-        size: creamui_core::layout::Size {
-            width: Dimension::Percent(1.0),
-            height: Dimension::Length(HEADER_HEIGHT),
-        },
-        flex_shrink: 0.0,
-        align_items: Some(AlignItems::Center),
-        padding: creamui_core::layout::Rect {
-            left: LengthPercentage::Length(start),
-            right: LengthPercentage::Length(end),
-            top: LengthPercentage::Length(0.0),
-            bottom: LengthPercentage::Length(0.0),
-        },
-        ..row(0.0)
-    };
-    let mut children = vec![navigation(
-        state,
-        page,
-        (width - start - end - controls_width).max(0.0),
-    )];
+    let wanted = tab_styles(
+        &["Browsing", "Window layout", "About"],
+        TabSizing::Equal,
+        34.0,
+        16.0,
+    )
+    .iter()
+    .map(|s| {
+        if let Dimension::Length(w) = s.size.width {
+            w
+        } else {
+            0.0
+        }
+    })
+    .sum::<f32>()
+        + 24.0;
+    let left = insets.start + 8.0;
+    let right = (width - end - 8.0).max(left);
+    let symmetric = 2.0 * (width / 2.0 - left).min(right - width / 2.0).max(0.0);
+    let available = wanted
+        .min(if symmetric >= 160.0 {
+            symmetric
+        } else {
+            right - left
+        })
+        .max(0.0);
+    let x = (width / 2.0 - available / 2.0).clamp(left, (right - available).max(left));
+    let trailing = if controls.is_some() { 128.0 } else { 0.0 };
+    let mut children = vec![
+        Box::new(RawView::new(fixed(x, 1.0))) as BoxedWidget,
+        Box::new(RawView::new(fixed(available, 42.0)).child(navigation(state, page, available))),
+        Box::new(RawView::new(fixed(
+            (width - x - available - trailing).max(0.0),
+            1.0,
+        ))),
+    ];
     if let Some(controls) = controls {
-        children.push(Box::new(RawView::new(Style {
-            flex_grow: 1.0,
-            flex_basis: Dimension::Length(0.0),
-            ..row(0.0)
-        })));
         children.push(controls);
+        children.push(Box::new(RawView::new(fixed(24.0, 1.0))));
     }
     Box::new(
         CUIWindowDragArea::new()
-            .layout(style)
+            .layout(Style {
+                align_items: Some(AlignItems::Center),
+                ..fixed(width, HEADER_HEIGHT)
+            })
             .with_children(children),
     )
 }
 
 fn navigation(state: &State, active: Page, available_width: f32) -> BoxedWidget {
     let theme = use_theme();
-    let labels = ["Browsing", "Window layout"];
+    let labels = [
+        "Browsing",
+        if available_width < 360.0 {
+            "Layout"
+        } else {
+            "Window layout"
+        },
+        "About",
+    ];
     let mut styles = tab_styles(&labels, TabSizing::Equal, 34.0, 16.0);
     for style in &mut styles {
         // Tab also passes this layout to its label. The fixed width already
@@ -203,7 +231,7 @@ fn navigation(state: &State, active: Page, available_width: f32) -> BoxedWidget 
         style.padding = Style::default().padding;
         if let Dimension::Length(width) = style.size.width {
             style.size.width =
-                Dimension::Length(width.min(((available_width - 16.0) / 2.0).max(0.0)));
+                Dimension::Length(width.min(((available_width - 24.0) / 3.0).max(0.0)));
         }
     }
     let mut colors = TabColors::dark();
@@ -223,7 +251,10 @@ fn navigation(state: &State, active: Page, available_width: f32) -> BoxedWidget 
             4.0,
         ),
     );
-    for (index, page) in [Page::Browsing, Page::Layout].into_iter().enumerate() {
+    for (index, page) in [Page::Browsing, Page::Layout, Page::About]
+        .into_iter()
+        .enumerate()
+    {
         let state = state.clone();
         tabs = tabs.child(Box::new(Tab::new(
             colors,
@@ -633,11 +664,31 @@ mod tests {
     use creamui_theme::{Theme, ThemeProvider};
     use std::{cell::Cell, rc::Rc};
 
+    fn tab_point(scene: &creamui_core::Scene, width: u32, index: usize) -> Point {
+        let xs = (0..width)
+            .filter(|x| {
+                scene.focus_hit_test(Point {
+                    x: *x as f32,
+                    y: 32.0,
+                }) == Some(index)
+            })
+            .collect::<Vec<_>>();
+        Point {
+            x: (xs.first().expect("tab has a visible hit region") + xs.last().unwrap()) as f32
+                / 2.0,
+            y: 32.0,
+        }
+    }
+
     #[test]
     fn preferences_tabs_render_and_navigate_without_changing_config() {
         for (appearance, theme) in [("light", Theme::light()), ("dark", Theme::dark())] {
             creamui_reactive::with_context_scope(|| {
                 creamui_reactive::provide_context(ThemeProvider::new(theme));
+                creamui_reactive::provide_context(Signal::new(creamui_render::WindowDecorations {
+                    mode: creamui_render::WindowDecorationMode::Pending,
+                    ..Default::default()
+                }));
                 let moves = Rc::new(Cell::new(0));
                 creamui_reactive::provide_context(WindowDragHandle::new({
                     let moves = moves.clone();
@@ -660,9 +711,9 @@ mod tests {
                         height: height as f32,
                     };
                     state.page.set(Page::Browsing);
-                    for (name, expected, next, tab_x) in [
-                        ("browsing", Page::Browsing, Page::Layout, 220.0),
-                        ("layout", Page::Layout, Page::Browsing, 80.0),
+                    for (name, expected, next) in [
+                        ("browsing", Page::Browsing, Page::Layout),
+                        ("layout", Page::Layout, Page::Browsing),
                     ] {
                         assert!(state.page.peek() == expected);
                         let mut recorder = SceneRecorder::new();
@@ -670,14 +721,14 @@ mod tests {
                         let scene =
                             Renderer::new().render(build(&state, size), size, &mut recorder);
                         let list = recorder.finish();
-                        // Both tabs, two choices, one switch and the options menu
+                        // Three tabs, two choices, one switch and the options menu
                         // remain available to keyboard navigation on either page.
                         if height >= 560 {
                             assert!(
-                                scene.focus_id_at(5).is_some(),
+                                scene.focus_id_at(6).is_some(),
                                 "all controls visible in {name}/{width}"
                             );
-                            assert!(scene.focus_id_at(6).is_none());
+                            assert!(scene.focus_id_at(7).is_none());
                         } else {
                             assert!(
                                 scene.focus_id_at(4).is_some(),
@@ -686,11 +737,7 @@ mod tests {
                         }
                         // Padding and unused header space move the window;
                         // tabs keep their own click and keyboard behavior.
-                        for point in [
-                            Point { x: 8.0, y: 32.0 },
-                            Point { x: 300.0, y: 32.0 },
-                            Point { x: 80.0, y: 8.0 },
-                        ] {
+                        for point in [Point { x: 8.0, y: 32.0 }, Point { x: 80.0, y: 8.0 }] {
                             let before = moves.get();
                             let drag = scene
                                 .window_drag_at(point)
@@ -699,7 +746,7 @@ mod tests {
                             assert_eq!(moves.get(), before + 1);
                             assert!(scene.hit_test(point).is_none());
                         }
-                        assert!(scene.window_drag_at(Point { x: 80.0, y: 32.0 }).is_none());
+                        assert!(scene.window_drag_at(tab_point(&scene, width, 0)).is_none());
                         assert!(scene.window_drag_at(Point { x: 32.0, y: 100.0 }).is_none());
                         for x in (width - 128..width).step_by(8) {
                             assert!(
@@ -709,7 +756,7 @@ mod tests {
                                         y: 32.0
                                     })
                                     .is_none(),
-                                "right edge stays free for compositor controls"
+                                "right edge stays free for compositor controls: {appearance}/{name}/{width}/{x}"
                             );
                         }
                         if let Some(directory) = std::env::var_os("DFILES_SETTINGS_SNAPSHOT_DIR") {
@@ -724,7 +771,7 @@ mod tests {
                         }
                         state.scroll.set(50.0);
                         scene
-                            .hit_test(Point { x: tab_x, y: 32.0 })
+                            .hit_test(tab_point(&scene, width, usize::from(next == Page::Layout)))
                             .expect("top tab is clickable")();
                         assert!(state.page.peek() == next);
                         assert_eq!(state.scroll.peek(), 0.0);
@@ -734,6 +781,56 @@ mod tests {
                 }
             });
         }
+    }
+
+    #[test]
+    fn about_tab_shows_package_information_and_project_links() {
+        creamui_reactive::with_context_scope(|| {
+            let theme = Theme::light();
+            creamui_reactive::provide_context(ThemeProvider::new(theme));
+            let state = State {
+                config: Signal::new(Config::default()),
+                page: Signal::new(Page::Browsing),
+                message: Signal::new(None),
+                scroll: ScrollController::new(0.0),
+                icons: crate::icons::Icons::load(),
+                menu_open: Signal::new(false),
+                reset_open: Signal::new(false),
+                window: Rc::new(RefCell::new(None)),
+                maximized: Signal::new(false),
+            };
+            let size = Size {
+                width: 760.0,
+                height: 640.0,
+            };
+            let mut recorder = SceneRecorder::new();
+            recorder.begin(760, 640, 1.0, CLEAR, theme.colors);
+            let scene = Renderer::new().render(build(&state, size), size, &mut recorder);
+            scene
+                .on_key_at(2)
+                .expect("About tab is keyboard accessible")(creamui_core::KeyInput {
+                key: creamui_core::Key::Enter,
+                modifiers: Default::default(),
+            });
+            assert!(state.page.peek() == Page::About);
+            let mut recorder = SceneRecorder::new();
+            recorder.begin(760, 640, 1.0, CLEAR, theme.colors);
+            let scene = Renderer::new().render(build(&state, size), size, &mut recorder);
+            assert!(
+                scene.focus_id_at(6).is_some(),
+                "three tabs and four project links"
+            );
+            assert!(scene.focus_id_at(7).is_none());
+            assert_eq!(state.config.peek(), Config::default());
+            if let Some(dir) = std::env::var_os("DFILES_SETTINGS_SNAPSHOT_DIR") {
+                let mut raster = Rasterizer::new(760, 640);
+                raster.render(&recorder.finish(), &Damage::Full);
+                raster
+                    .pixmap()
+                    .save_png(std::path::PathBuf::from(dir).join("dfiles-about.png"))
+                    .unwrap();
+            }
+        });
     }
 
     #[test]
@@ -756,7 +853,7 @@ mod tests {
                 window: Rc::new(RefCell::new(None)),
                 maximized: Signal::new(false),
             };
-            for (x, width, tab_x) in [(240, 224, 180.0), (8, 112, 280.0)] {
+            for (x, width) in [(240, 224), (8, 112)] {
                 decorations.set(WindowDecorations {
                     mode: WindowDecorationMode::Hybrid,
                     controls: CompositorControls {
@@ -786,7 +883,7 @@ mod tests {
                         .is_none());
                 }
                 scene
-                    .hit_test(Point { x: tab_x, y: 32.0 })
+                    .hit_test(tab_point(&scene, 480, 1))
                     .expect("layout tab stays accessible")();
                 assert!(state.page.peek() == Page::Layout);
                 state.page.set(Page::Browsing);
@@ -935,23 +1032,30 @@ mod tests {
                         &mut recorder,
                     );
                     let is_client = mode == WindowDecorationMode::Client;
-                    assert!(scene.focus_id_at(if is_client { 4 } else { 1 }).is_some());
-                    assert!(scene.focus_id_at(if is_client { 5 } else { 2 }).is_none());
+                    assert!(scene.focus_id_at(if is_client { 5 } else { 2 }).is_some());
+                    assert!(scene.focus_id_at(if is_client { 6 } else { 3 }).is_none());
                     for offset in [32.0, 68.0, 104.0] {
                         let point = Point {
                             x: size.width - offset,
                             y: 32.0,
                         };
-                        assert_eq!(
-                            scene.hit_test(point).is_some(),
-                            is_client,
-                            "{mode:?}/{width}/{offset}"
-                        );
+                        if matches!(
+                            mode,
+                            WindowDecorationMode::Pending
+                                | WindowDecorationMode::Hybrid
+                                | WindowDecorationMode::Client
+                        ) {
+                            assert_eq!(
+                                scene.hit_test(point).is_some(),
+                                is_client,
+                                "{mode:?}/{width}/{offset}"
+                            );
+                        }
                         if is_client {
                             assert!(scene.window_drag_at(point).is_none());
                         }
                     }
-                    assert!(scene.window_drag_at(Point { x: 300.0, y: 32.0 }).is_some());
+                    assert!(scene.window_drag_at(Point { x: 8.0, y: 32.0 }).is_some());
                     if width == 760 {
                         if let Some(directory) = std::env::var_os("DFILES_SETTINGS_SNAPSHOT_DIR") {
                             let mut recorder = SceneRecorder::new();
