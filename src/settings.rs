@@ -4,10 +4,12 @@ use crate::components::window_chrome;
 use crate::config::{Config, TabPosition};
 use creamui_core::{
     layout::{AlignItems, Dimension, FlexDirection, JustifyContent, LengthPercentage, Style},
-    BoxShadow, BoxedWidget, LinearGradient, Size, StateStyle, Styled,
+    BoxedWidget, LinearGradient, Size, StateStyle, Styled,
 };
 use creamui_reactive::Signal;
-use creamui_theme::{use_theme, Color};
+use creamui_theme::use_theme;
+#[cfg(test)]
+use creamui_theme::Color;
 use creamui_widgets::{
     tab_styles, CUIWindowDragArea, Icon, RawButton, RawScrollView, RawView, ScrollController,
     SegmentedControl, Switch, Symbol, Tab, TabColors, TabSizing, Tabs, Text,
@@ -19,8 +21,6 @@ mod preview;
 
 #[cfg(test)]
 const CLEAR: Color = Color::rgba(0, 0, 0, 0);
-const BROWSING_COLOR: Color = Color::rgb(47, 142, 210);
-const LAYOUT_COLOR: Color = Color::rgb(126, 104, 211);
 const HEADER_HEIGHT: f32 = 64.0;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -71,23 +71,20 @@ impl State {
 pub(crate) fn build(state: &State, size: Size) -> BoxedWidget {
     let theme = use_theme();
     let page = state.page.get();
-    let (title, description, icon, body) = match page {
+    let (title, description, body) = match page {
         Page::Browsing => (
             "Browsing",
             "Choose how folders open and what they show.",
-            "folder-large",
             browsing(state),
         ),
         Page::Layout => (
             "Window layout",
             "Arrange your tabs and status information.",
-            "desktop",
             window_layout(state),
         ),
         Page::About => (
             "About",
             "File Explorer",
-            "folder-large",
             crate::about::build("File Explorer"),
         ),
     };
@@ -95,7 +92,7 @@ pub(crate) fn build(state: &State, size: Size) -> BoxedWidget {
         vec![body]
     } else {
         vec![
-            page_heading(state, title, description, icon),
+            page_heading(state, title, description),
             body,
             Box::new(
                 Text::secondary("Changes are saved automatically for new windows.").font_size(12.0),
@@ -271,7 +268,7 @@ fn navigation(state: &State, active: Page, available_width: f32) -> BoxedWidget 
     Box::new(tabs)
 }
 
-fn page_heading(state: &State, title: &str, description: &str, icon: &str) -> BoxedWidget {
+fn page_heading(state: &State, title: &str, description: &str) -> BoxedWidget {
     let theme = use_theme();
     let open_menu = state.clone();
     Box::new(
@@ -280,7 +277,6 @@ fn page_heading(state: &State, title: &str, description: &str, icon: &str) -> Bo
             ..row(16.0)
         })
         .with_children(vec![
-            Box::new(Icon::new(state.icons.get(icon), theme.colors.accent).size(44.0)),
             Box::new(
                 RawView::new(Style {
                     flex_grow: 1.0,
@@ -333,7 +329,6 @@ fn browsing(state: &State) -> BoxedWidget {
             "Files & folders",
             vec![preference_row(
                 Symbol::Folder,
-                BROWSING_COLOR,
                 "Show hidden files",
                 "Include dot-prefixed files and folders.",
                 Box::new(hidden),
@@ -385,7 +380,6 @@ fn view_choice(state: &State, grid: bool, title: &str, hint: &str) -> BoxedWidge
             if selected { 1.5 } else { 1.0 },
         )
         .corner_radius(16.0)
-        .box_shadow(card_shadow())
         .hover_style(
             StateStyle::new()
                 .background(theme.colors.surface_elevated.mix(theme.colors.accent, 0.06)),
@@ -451,14 +445,12 @@ fn window_layout(state: &State) -> BoxedWidget {
         vec![
             preference_row(
                 Symbol::Controls,
-                LAYOUT_COLOR,
                 "Tab position",
                 "Place tabs above or below your files.",
                 Box::new(position),
             ),
             preference_row(
                 Symbol::Display,
-                LAYOUT_COLOR,
                 "Show status bar",
                 "Selection details and the item count.",
                 Box::new(statusbar),
@@ -470,7 +462,6 @@ fn window_layout(state: &State) -> BoxedWidget {
             .background(use_theme().colors.surface_elevated)
             .outline(use_theme().colors.border, 1.0)
             .corner_radius(16.0)
-            .box_shadow(card_shadow())
             .child(Box::new(preview::ExplorerPreview::new(&state.icons, config.explorer, 152.0)))),
         controls,
     ]))
@@ -478,7 +469,6 @@ fn window_layout(state: &State) -> BoxedWidget {
 
 fn preference_row(
     icon: Symbol,
-    color: Color,
     title: &str,
     description: &str,
     control: BoxedWidget,
@@ -492,7 +482,7 @@ fn preference_row(
                 },
                 min_size: creamui_core::layout::Size {
                     width: Dimension::Length(0.0),
-                    height: Dimension::Length(72.0),
+                    height: Dimension::Length(62.0),
                 },
                 flex_shrink: 0.0,
                 align_items: Some(AlignItems::Center),
@@ -502,7 +492,7 @@ fn preference_row(
             12.0,
         ))
         .with_children(vec![
-            icon_badge(icon, color, 24.0),
+            icon_badge(icon),
             Box::new(
                 RawView::new(Style {
                     flex_grow: 1.0,
@@ -511,11 +501,11 @@ fn preference_row(
                         width: Dimension::Length(0.0),
                         height: Dimension::Auto,
                     },
-                    ..column(4.0)
+                    ..column(3.0)
                 })
                 .with_children(vec![
-                    Box::new(Text::new(title).font_size(14.0)),
-                    Box::new(Text::secondary(description).font_size(12.0)),
+                    Box::new(Text::new(title).font_size(13.0)),
+                    Box::new(Text::secondary(description).font_size(11.0)),
                 ]),
             ),
             Box::new(
@@ -556,41 +546,35 @@ fn section(title: &str, rows: Vec<BoxedWidget>) -> BoxedWidget {
                 .background(theme.colors.surface_elevated)
                 .outline(theme.colors.border, 1.0)
                 .corner_radius(16.0)
-                .box_shadow(card_shadow())
                 .with_children(children),
         ),
     )
 }
 
 fn labeled(title: &str, content: BoxedWidget) -> BoxedWidget {
-    Box::new(RawView::new(column(10.0)).with_children(vec![
-        Box::new(Text::secondary(title.to_uppercase()).font_size(11.0).bold(true)),
-        content,
-    ]))
+    Box::new(RawView::new(column(8.0)).with_children(vec![
+            Box::new(
+                Text::secondary(title.to_uppercase())
+                    .font_size(11.0)
+                    .bold(true)
+                    .padding_left(4.0),
+            ),
+            content,
+        ]))
 }
 
-fn icon_badge(icon: Symbol, color: Color, size: f32) -> BoxedWidget {
+fn icon_badge(icon: Symbol) -> BoxedWidget {
+    let theme = use_theme();
     Box::new(
         RawView::new(Style {
             align_items: Some(AlignItems::Center),
             justify_content: Some(JustifyContent::Center),
-            ..fixed(size, size)
+            ..fixed(28.0, 28.0)
         })
-        .background(LinearGradient::new(
-            180.0,
-            color.mix(Color::rgb(255, 255, 255), 0.22),
-            color,
-        ))
-        .corner_radius(if size <= 24.0 { size / 2.0 } else { 16.0 })
-        .box_shadow(card_shadow())
-        .child(Box::new(
-            Icon::new(icon, Color::rgb(255, 255, 255)).size(size * 0.54),
-        )),
+        .background(theme.colors.surface.mix(theme.colors.accent, 0.1))
+        .corner_radius(8.0)
+        .child(Box::new(Icon::new(icon, theme.colors.accent).size(16.0))),
     )
-}
-
-fn card_shadow() -> BoxShadow {
-    BoxShadow::new(0.0, 1.0, 2.0, 0.0, Color::rgba(25, 35, 50, 10))
 }
 
 fn content_inset(width: f32) -> f32 {
