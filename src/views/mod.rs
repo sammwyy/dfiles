@@ -1,6 +1,7 @@
 use self::{directory::directory_view, home::home_view};
 use crate::components::*;
 use crate::components::{navigation::*, portal_footer::portal_footer, sidebar::sidebar};
+use crate::config::TabPosition;
 pub(crate) mod directory;
 mod home;
 
@@ -16,6 +17,8 @@ fn build_scoped(b: &BrowserState, size: Size) -> BoxedWidget {
     let tab = b.tab();
     let sidebar_width = if size.width < 850.0 { 192.0 } else { 236.0 };
     let content_width = (size.width - sidebar_width).max(180.0);
+    let tabs_at_top = b.explorer.tab_position == TabPosition::Top;
+    let has_tab_strip = b.tabs.get().len() > 1;
     let content = if tab.location() == &Location::Home {
         home_view(b, &tab, content_width)
     } else {
@@ -33,10 +36,23 @@ fn build_scoped(b: &BrowserState, size: Size) -> BoxedWidget {
         .child(content),
     );
     let mut main = Vec::new();
-    if let Some(tabs) = tab_bar(b, size.width, sidebar_width) {
-        main.push(tabs);
+    if tabs_at_top {
+        if let Some(tabs) = tab_bar(b, content_width, sidebar_width, 0.0, true) {
+            main.push(tabs);
+        }
     }
-    main.push(toolbar(b, &tab, content_width));
+    main.push(toolbar(
+        b,
+        &tab,
+        sidebar_width,
+        content_width,
+        if tabs_at_top && has_tab_strip {
+            CHROME_HEIGHT
+        } else {
+            0.0
+        },
+        !(tabs_at_top && has_tab_strip),
+    ));
     if let Some(filters) = crate::components::portal_footer::filter_bar(b) {
         main.push(filters);
     }
@@ -50,7 +66,52 @@ fn build_scoped(b: &BrowserState, size: Size) -> BoxedWidget {
     if use_is_portal().is_some() {
         main.push(portal_footer(b, &tab));
     }
-    main.push(statusbar(b, &tab));
+    if tabs_at_top {
+        if b.explorer.show_statusbar {
+            main.push(statusbar(b, &tab, false));
+        }
+    } else if b.explorer.show_statusbar {
+        let strip_width = (content_width - COMPACT_STATUS_WIDTH).max(0.0);
+        let mut bottom = Vec::new();
+        if let Some(tabs) = tab_bar(
+            b,
+            strip_width,
+            sidebar_width,
+            size.height - CHROME_HEIGHT,
+            false,
+        ) {
+            bottom.push(tabs);
+        } else {
+            bottom.push(view(
+                Style {
+                    flex_grow: 1.0,
+                    flex_basis: Dimension::Length(0.0),
+                    ..row(0.0)
+                },
+                vec![],
+            ));
+        }
+        bottom.push(statusbar(b, &tab, true));
+        main.push(view(
+            Style {
+                size: creamui_core::layout::Size {
+                    width: Dimension::Percent(1.0),
+                    height: Dimension::Length(CHROME_HEIGHT),
+                },
+                flex_shrink: 0.0,
+                ..row(0.0)
+            },
+            bottom,
+        ));
+    } else if let Some(tabs) = tab_bar(
+        b,
+        content_width,
+        sidebar_width,
+        size.height - CHROME_HEIGHT,
+        false,
+    ) {
+        main.push(tabs);
+    }
     view(
         Style {
             size: creamui_core::layout::Size {

@@ -17,6 +17,18 @@ pub struct ExplorerConfig {
     pub show_hidden: bool,
     /// Open directory tabs using the grid presentation.
     pub default_grid_view: bool,
+    /// Put the tab strip above or below the folder contents.
+    pub tab_position: TabPosition,
+    /// Display the current selection and item count in the status area.
+    pub show_statusbar: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TabPosition {
+    #[default]
+    Top,
+    Bottom,
 }
 
 impl Default for Config {
@@ -32,6 +44,8 @@ impl Default for ExplorerConfig {
         Self {
             show_hidden: false,
             default_grid_view: false,
+            tab_position: TabPosition::Top,
+            show_statusbar: true,
         }
     }
 }
@@ -84,6 +98,17 @@ mod tests {
         let config = Config::default();
         assert!(!config.explorer.show_hidden);
         assert!(!config.explorer.default_grid_view);
+        assert_eq!(config.explorer.tab_position, TabPosition::Top);
+        assert!(config.explorer.show_statusbar);
         assert!(toml::to_string(&config).unwrap().contains("[explorer]"));
+    }
+
+    #[test]
+    fn layout_preferences_round_trip() {
+        let config: Config =
+            toml::from_str("[explorer]\ntab_position = \"bottom\"\nshow_statusbar = false\n")
+                .unwrap();
+        assert_eq!(config.explorer.tab_position, TabPosition::Bottom);
+        assert!(!config.explorer.show_statusbar);
     }
 }

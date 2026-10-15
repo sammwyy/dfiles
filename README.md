@@ -112,6 +112,11 @@ dfiles --portal
 Settings are stored in `$XDG_CONFIG_HOME/dfiles/config.toml` (normally
 `~/.config/dfiles/config.toml`).
 
+The `explorer.tab_position` preference accepts `"top"` (the default) or
+`"bottom"`; `explorer.show_statusbar` controls the item-count/status area.
+Both are also available from `dfiles --settings` and apply to newly opened
+windows.
+
 ## Development
 
 ```bash

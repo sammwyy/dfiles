@@ -1,10 +1,70 @@
 use super::*;
 use crate::views::directory::visible_entries;
 
+pub(crate) const CHROME_HEIGHT: f32 = 54.0;
+pub(crate) const COMPACT_STATUS_WIDTH: f32 = 210.0;
+
+#[derive(Default)]
+struct DecorationInsets {
+    start: f32,
+    end: f32,
+}
+
+/// Returns the space in this row that belongs to the window manager.
+///
+/// Hybrid decorations are expressed in window coordinates, while the browser
+/// chrome begins after the sidebar.  Reserving the intersecting side here
+/// keeps controls out from underneath compositor buttons regardless of which
+/// side the compositor puts them on.
+fn decoration_insets(
+    content_x: f32,
+    width: f32,
+    row_y: f32,
+    row_height: f32,
+    client_controls: bool,
+) -> DecorationInsets {
+    let decorations = creamui_render::use_window_decorations();
+    if decorations.mode == WindowDecorationMode::Client {
+        return if client_controls {
+            DecorationInsets {
+                end: 108.0,
+                ..Default::default()
+            }
+        } else {
+            DecorationInsets::default()
+        };
+    }
+    let controls = decorations.controls;
+    let controls_top = controls.y as f32;
+    let controls_bottom = controls_top + controls.height as f32;
+    let overlaps_row = controls.width > 0
+        && controls.height > 0
+        && controls_top < row_y + row_height
+        && controls_bottom > row_y;
+    if !overlaps_row {
+        return DecorationInsets::default();
+    }
+    let right = content_x + width;
+    let center = controls.x as f32 + controls.width as f32 / 2.0;
+    if center <= content_x + width / 2.0 {
+        DecorationInsets {
+            start: (controls.x as f32 + controls.width as f32 + 8.0 - content_x).clamp(0.0, width),
+            ..Default::default()
+        }
+    } else {
+        DecorationInsets {
+            end: (right - controls.x as f32 + 8.0).clamp(0.0, width),
+            ..Default::default()
+        }
+    }
+}
+
 pub(crate) fn tab_bar(
     b: &BrowserState,
-    window_width: f32,
-    sidebar_width: f32,
+    width: f32,
+    content_x: f32,
+    row_y: f32,
+    show_client_controls: bool,
 ) -> Option<BoxedWidget> {
     // A lone tab does not need its own title strip: its location is already
     // visible in the address bar. Show the strip only when it is needed to
@@ -12,20 +72,13 @@ pub(crate) fn tab_bar(
     if b.tabs.get().len() == 1 {
         return None;
     }
-    let width = window_width - sidebar_width;
     let t = use_theme();
-    let decorations = creamui_render::use_window_decorations();
-    let reserved = if decorations.mode == WindowDecorationMode::Client {
-        108.0
-    } else if decorations.controls.width > 0 && decorations.controls.x as f32 > window_width / 2.0 {
-        (window_width - decorations.controls.x as f32 + 8.0).max(0.0)
-    } else {
-        10.0
-    };
+    let insets = decoration_insets(content_x, width, row_y, CHROME_HEIGHT, show_client_controls);
+    let usable_width = (width - insets.start - insets.end).max(0.0);
     let tabs = b.tabs.get();
     // Page the strip when space is tight, keeping the active tab and native
     // window controls visible even after shrinking a window with many tabs.
-    let capacity = ((width - reserved - 136.0) / 116.0).floor().max(1.0) as usize;
+    let capacity = ((usable_width - 136.0) / 116.0).floor().max(1.0) as usize;
     let paged = tabs.len() > capacity;
     let start = if paged {
         b.active.get() / capacity * capacity
@@ -34,11 +87,14 @@ pub(crate) fn tab_bar(
     };
     let end = (start + capacity).min(tabs.len());
     // Fill the usable strip instead of leaving a large, ambiguous blank area.
-    // `reserved` is supplied by the compositor/window decorations, so tabs
-    // never extend under KWin's (or another compositor's) window controls.
+    // The decoration inset is supplied by the compositor/window decorations,
+    // so tabs never extend under KWin's (or another compositor's) controls.
     let tab_width =
-        ((width - reserved - if paged { 136.0 } else { 66.0 }) / (end - start) as f32).max(58.0);
+        ((usable_width - if paged { 136.0 } else { 66.0 }) / (end - start) as f32).max(58.0);
     let mut children = Vec::new();
+    if insets.start > 0.0 {
+        children.push(view(fixed(insets.start, 1.0), vec![]));
+    }
     if paged {
         let previous = b.clone();
         children.push(icon_button(b, "back", start > 0, false, move || {
@@ -112,11 +168,13 @@ pub(crate) fn tab_bar(
         flex_grow: 1.0,
         size: creamui_core::layout::Size {
             width: Dimension::Auto,
-            height: Dimension::Length(54.0),
+            height: Dimension::Length(CHROME_HEIGHT),
         },
         ..row(0.0)
     })));
-    if decorations.mode == WindowDecorationMode::Client {
+    if show_client_controls
+        && creamui_render::use_window_decorations().mode == WindowDecorationMode::Client
+    {
         for (index, icon) in ["minimize", "maximize", "close"].iter().enumerate() {
             let state = b.clone();
             children.push(icon_button(b, icon, true, false, move || {
@@ -133,15 +191,15 @@ pub(crate) fn tab_bar(
                 }
             }));
         }
-    } else {
-        children.push(view(fixed(reserved, 1.0), vec![]));
+    } else if insets.end > 0.0 {
+        children.push(view(fixed(insets.end, 1.0), vec![]));
     }
     Some(Box::new(
         RawView::new(pad(
             Style {
                 size: creamui_core::layout::Size {
-                    width: Dimension::Percent(1.0),
-                    height: Dimension::Length(54.0),
+                    width: Dimension::Length(width),
+                    height: Dimension::Length(CHROME_HEIGHT),
                 },
                 flex_shrink: 0.0,
                 ..row(3.0)
@@ -154,7 +212,14 @@ pub(crate) fn tab_bar(
     ))
 }
 
-pub(crate) fn toolbar(b: &BrowserState, tab: &Tab, width: f32) -> BoxedWidget {
+pub(crate) fn toolbar(
+    b: &BrowserState,
+    tab: &Tab,
+    content_x: f32,
+    width: f32,
+    row_y: f32,
+    show_client_controls: bool,
+) -> BoxedWidget {
     let t = use_theme();
     let back = b.clone();
     let forward = b.clone();
@@ -168,7 +233,21 @@ pub(crate) fn toolbar(b: &BrowserState, tab: &Tab, width: f32) -> BoxedWidget {
         Location::Directory(p) => p.parent().map(Path::to_path_buf),
         _ => None,
     };
-    let mut items = vec![
+    let insets = decoration_insets(content_x, width, row_y, CHROME_HEIGHT, false);
+    let usable_width = (width - insets.start - insets.end).max(0.0);
+    let compact_view_mode = usable_width < 610.0;
+    let search_width = if usable_width < 540.0 {
+        92.0
+    } else if usable_width < 700.0 {
+        132.0
+    } else {
+        210.0
+    };
+    let mut items = Vec::new();
+    if insets.start > 0.0 {
+        items.push(view(fixed(insets.start, 1.0), vec![]));
+    }
+    items.extend([
         icon_button(b, "back", tab.cursor > 0, false, move || back.travel(false)),
         icon_button(
             b,
@@ -182,7 +261,7 @@ pub(crate) fn toolbar(b: &BrowserState, tab: &Tab, width: f32) -> BoxedWidget {
                 up.navigate(Location::Directory(p.clone()));
             }
         }),
-    ];
+    ]);
     if b.tabs.get().len() == 1 {
         // Keep a compact, dedicated drag handle when the single-tab strip is
         // hidden. It replaces the otherwise empty title-strip real estate.
@@ -194,7 +273,7 @@ pub(crate) fn toolbar(b: &BrowserState, tab: &Tab, width: f32) -> BoxedWidget {
                 flex_grow: 1.0,
                 flex_basis: Dimension::Length(0.0),
                 min_size: creamui_core::layout::Size {
-                    width: Dimension::Length(40.0),
+                    width: Dimension::Length(if compact_view_mode { 72.0 } else { 96.0 }),
                     height: Dimension::Length(34.0),
                 },
                 ..TextInput::default_style()
@@ -212,7 +291,6 @@ pub(crate) fn toolbar(b: &BrowserState, tab: &Tab, width: f32) -> BoxedWidget {
     if b.tabs.get().len() == 1 {
         items.push(icon_button(b, "plus", true, false, move || add.add_tab()));
     }
-    let search_width = if width < 650.0 { 132.0 } else { 210.0 };
     items.push(Box::new(
         RawView::new(pad(fixed(search_width, 34.0), 10.0, 0.0))
             .background(t.colors.surface_elevated)
@@ -235,19 +313,42 @@ pub(crate) fn toolbar(b: &BrowserState, tab: &Tab, width: f32) -> BoxedWidget {
             ]),
     ));
     if tab.location() != &Location::Home {
-        items.push(icon_button(b, "list", true, !tab.grid, move || {
-            list.edit(|t| t.grid = false)
-        }));
-        items.push(icon_button(b, "grid", true, tab.grid, move || {
-            grid.edit(|t| t.grid = true)
-        }));
+        items.push(view_mode_switcher(
+            b,
+            tab.grid,
+            compact_view_mode,
+            list,
+            grid,
+        ));
+    }
+    if show_client_controls
+        && creamui_render::use_window_decorations().mode == WindowDecorationMode::Client
+    {
+        for (index, icon) in ["minimize", "maximize", "close"].iter().enumerate() {
+            let state = b.clone();
+            items.push(icon_button(b, icon, true, false, move || {
+                if let Some(handle) = state.window.borrow().as_ref() {
+                    match index {
+                        0 => handle.minimize(),
+                        1 => {
+                            let next = !state.maximized.peek();
+                            handle.set_maximized(next);
+                            state.maximized.set(next);
+                        }
+                        _ => handle.close(),
+                    }
+                }
+            }));
+        }
+    } else if insets.end > 0.0 {
+        items.push(view(fixed(insets.end, 1.0), vec![]));
     }
     view(
         pad(
             Style {
                 size: creamui_core::layout::Size {
                     width: Dimension::Percent(1.0),
-                    height: Dimension::Length(54.0),
+                    height: Dimension::Length(CHROME_HEIGHT),
                 },
                 flex_shrink: 0.0,
                 ..row(4.0)
@@ -259,7 +360,64 @@ pub(crate) fn toolbar(b: &BrowserState, tab: &Tab, width: f32) -> BoxedWidget {
     )
 }
 
-pub(crate) fn statusbar(b: &BrowserState, tab: &Tab) -> BoxedWidget {
+fn view_mode_switcher(
+    b: &BrowserState,
+    grid_active: bool,
+    compact: bool,
+    list: BrowserState,
+    grid: BrowserState,
+) -> BoxedWidget {
+    let t = use_theme();
+    if compact {
+        let toggle = b.clone();
+        return icon_button(
+            b,
+            if grid_active { "list" } else { "grid" },
+            true,
+            true,
+            move || toggle.edit(|tab| tab.grid = !tab.grid),
+        );
+    }
+    Box::new(
+        RawView::new(fixed(68.0, 32.0))
+            .background(t.colors.surface_elevated)
+            .corner_radius(8.0)
+            .with_children(vec![
+                Box::new(button(
+                    fixed(34.0, 32.0),
+                    !grid_active,
+                    move || list.edit(|tab| tab.grid = false),
+                    vec![glyph(
+                        b,
+                        "list",
+                        16.0,
+                        if !grid_active {
+                            t.colors.accent
+                        } else {
+                            t.colors.text_secondary
+                        },
+                    )],
+                )),
+                Box::new(button(
+                    fixed(34.0, 32.0),
+                    grid_active,
+                    move || grid.edit(|tab| tab.grid = true),
+                    vec![glyph(
+                        b,
+                        "grid",
+                        16.0,
+                        if grid_active {
+                            t.colors.accent
+                        } else {
+                            t.colors.text_secondary
+                        },
+                    )],
+                )),
+            ]),
+    )
+}
+
+pub(crate) fn statusbar(b: &BrowserState, tab: &Tab, compact: bool) -> BoxedWidget {
     let count = if tab.location() == &Location::Home {
         let query = tab.search.value().to_lowercase();
         b.pins
@@ -308,7 +466,7 @@ pub(crate) fn statusbar(b: &BrowserState, tab: &Tab) -> BoxedWidget {
         ),
         label(format!("{count} items"), 11.0, true),
     ];
-    if b.context.is_manager() && selection.is_some() {
+    if !compact && b.context.is_manager() && selection.is_some() {
         let state = b.clone();
         children.push(action("Open", false, true, move || state.accept()));
     }
@@ -316,13 +474,17 @@ pub(crate) fn statusbar(b: &BrowserState, tab: &Tab) -> BoxedWidget {
         RawView::new(pad(
             Style {
                 size: creamui_core::layout::Size {
-                    width: Dimension::Percent(1.0),
-                    height: Dimension::Length(38.0),
+                    width: if compact {
+                        Dimension::Length(COMPACT_STATUS_WIDTH)
+                    } else {
+                        Dimension::Percent(1.0)
+                    },
+                    height: Dimension::Length(if compact { CHROME_HEIGHT } else { 38.0 }),
                 },
                 flex_shrink: 0.0,
                 ..row(12.0)
             },
-            16.0,
+            if compact { 12.0 } else { 16.0 },
             0.0,
         ))
         .background(

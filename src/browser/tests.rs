@@ -304,9 +304,16 @@ fn native_layout_and_portal_previews() {
             "compositor owns hybrid controls"
         );
         scene
-            .hit_test(Point { x: 865.0, y: 26.0 })
+            .hit_test(Point { x: 740.0, y: 26.0 })
             .expect("new tab button")();
         assert_eq!(browser.tabs.peek().len(), 2);
+        browser.explorer.tab_position = crate::config::TabPosition::Bottom;
+        let bottom_tabs = render(&browser, size, "tabs-bottom");
+        assert!(
+            bottom_tabs.hit_test(Point { x: 350.0, y: 733.0 }).is_some(),
+            "bottom tab strip is interactive"
+        );
+        browser.explorer.tab_position = crate::config::TabPosition::Top;
         browser.navigate(Location::Directory(fixture.path().to_path_buf()));
         let scene = render(&browser, size, "list");
         scene
