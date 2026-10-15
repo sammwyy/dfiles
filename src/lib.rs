@@ -4,16 +4,18 @@ pub mod app;
 mod browser;
 pub mod cli;
 mod components;
+pub mod config;
 pub mod context;
 mod filesystem;
 mod icon_theme;
 mod icons;
 mod navigation;
 pub mod portal;
+mod settings;
 mod views;
 pub mod window;
 
-pub use app::show_window;
+pub use app::{show_settings, show_window};
 pub use window::{WindowMode, WindowRequest};
 
 #[cfg(test)]

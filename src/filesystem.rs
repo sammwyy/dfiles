@@ -42,11 +42,11 @@ pub(crate) fn home() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("/"))
 }
 
-pub(crate) fn entries(path: &Path) -> io::Result<Vec<Entry>> {
+pub(crate) fn entries(path: &Path, show_hidden: bool) -> io::Result<Vec<Entry>> {
     let mut items = Vec::new();
     for entry in fs::read_dir(path)? {
         let entry = entry?;
-        if entry.file_name().as_bytes().starts_with(b".") {
+        if !show_hidden && entry.file_name().as_bytes().starts_with(b".") {
             continue;
         }
         // Follow symlinks so linked folders remain navigable.
@@ -75,9 +75,7 @@ pub(crate) struct Place {
 
 pub(crate) fn places() -> Vec<Place> {
     let home = home();
-    let config = std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| home.join(".config"));
+    let config = delib::xdg::XdgPaths::default().config_home;
     let dirs = fs::read_to_string(config.join("user-dirs.dirs")).unwrap_or_default();
     let mut result = vec![Place {
         label: "Home folder".into(),

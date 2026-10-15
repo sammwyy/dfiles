@@ -618,7 +618,9 @@ dependencies = [
  "delib",
  "libc",
  "mime_guess",
+ "serde",
  "tempfile",
+ "toml",
  "url",
 ]
 

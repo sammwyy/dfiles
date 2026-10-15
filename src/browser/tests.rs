@@ -105,7 +105,7 @@ fn listing_is_complete_sorted_and_follows_directory_links() {
     )
     .unwrap();
     fs::write(fixture.path().join(".hidden"), "hidden").unwrap();
-    let items = files::entries(fixture.path()).unwrap();
+    let items = files::entries(fixture.path(), false).unwrap();
     assert_eq!(items.len(), 42);
     assert!(items[0].directory);
     assert!(items[1].directory);

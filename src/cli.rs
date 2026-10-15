@@ -3,6 +3,7 @@ use std::{ffi::OsString, path::PathBuf};
 #[derive(Debug, PartialEq, Eq)]
 pub enum Launch {
     Manager(Option<PathBuf>),
+    Settings,
     Portal,
     Help,
     Version,
@@ -15,6 +16,8 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Launch, String>
     };
     let launch = if first == "--portal" {
         Launch::Portal
+    } else if first == "--settings" || first == "--setings" {
+        Launch::Settings
     } else if first == "--help" || first == "-h" {
         Launch::Help
     } else if first == "--version" || first == "-V" {
@@ -39,7 +42,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Launch, String>
     Ok(launch)
 }
 
-pub const HELP: &str = "Usage: dfiles [FOLDER | file://URI]\n       dfiles --portal\n\n  --portal     Run the D-Bus file chooser backend\n  --help       Show this help\n  --version    Show the version\n  -- PATH      Open a path that starts with a dash";
+pub const HELP: &str = "Usage: dfiles [FOLDER | file://URI]\n       dfiles --settings\n       dfiles --portal\n\n  --settings   Open File Explorer settings (--setings is also accepted)\n  --portal     Run the D-Bus file chooser backend\n  --help       Show this help\n  --version    Show the version\n  -- PATH      Open a path that starts with a dash";
 
 #[cfg(test)]
 mod tests {
@@ -51,6 +54,8 @@ mod tests {
     fn selects_one_launch_mode() {
         assert_eq!(parse(args(&[])).unwrap(), Launch::Manager(None));
         assert_eq!(parse(args(&["--portal"])).unwrap(), Launch::Portal);
+        assert_eq!(parse(args(&["--settings"])).unwrap(), Launch::Settings);
+        assert_eq!(parse(args(&["--setings"])).unwrap(), Launch::Settings);
         assert_eq!(
             parse(args(&["file:///tmp/a%20b"])).unwrap(),
             Launch::Manager(Some("/tmp/a b".into()))

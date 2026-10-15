@@ -10,6 +10,7 @@ fn main() -> Result<(), String> {
         Launch::Manager(path) => {
             show_window(WindowRequest::manager(path));
         }
+        Launch::Settings => dfiles::show_settings(),
         Launch::Portal => dfiles::portal::service::run()?,
         Launch::Help => println!("{}", cli::HELP),
         Launch::Version => println!("File Explorer {}", env!("CARGO_PKG_VERSION")),

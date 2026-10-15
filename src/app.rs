@@ -55,6 +55,33 @@ pub fn show_window(request: WindowRequest) -> Option<crate::portal::PortalSelect
     selected
 }
 
+/// Opens the File Explorer preferences instead of a filesystem browser.
+pub fn show_settings() {
+    ensure_wayland_display();
+    let settings = crate::settings::State::load();
+    let options = WindowOptions {
+        title: "File Explorer Settings".into(),
+        width: 760,
+        height: 560,
+        transparent: true,
+        blur: Some(BlurRegion::Window),
+        theme: load_system_theme(),
+        ..Default::default()
+    };
+    AppBuilder::new()
+        .on_started(move |app| {
+            app.append_window(
+                options,
+                Color::rgba(0, 0, 0, 0),
+                |handle| {
+                    handle.set_compositor_integration(Some(CompositorIntegrationRequest::Hybrid));
+                },
+                move |size| crate::settings::build(&settings, size),
+            );
+        })
+        .run();
+}
+
 fn load_system_theme() -> Theme {
     match creamui_theme_loader::SystemThemeLoader::new().load() {
         Ok(appearance) => {

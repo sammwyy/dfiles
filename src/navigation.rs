@@ -1,4 +1,4 @@
-use crate::filesystem as files;
+use crate::{config::ExplorerConfig, filesystem as files};
 use creamui_widgets::{ScrollController, TextController};
 use std::{path::PathBuf, rc::Rc};
 
@@ -30,12 +30,13 @@ pub(crate) struct Tab {
     pub(crate) error: Option<String>,
     pub(crate) selected: Option<PathBuf>,
     pub(crate) grid: bool,
+    pub(crate) show_hidden: bool,
     pub(crate) address: TextController,
     pub(crate) search: TextController,
     pub(crate) scroll: ScrollController,
 }
 impl Tab {
-    pub(crate) fn new(location: Location) -> Self {
+    pub(crate) fn new(location: Location, explorer: &ExplorerConfig) -> Self {
         let mut tab = Self {
             address: TextController::new(location.address()),
             history: vec![location],
@@ -43,7 +44,8 @@ impl Tab {
             entries: Rc::new(Vec::new()),
             error: None,
             selected: None,
-            grid: false,
+            grid: explorer.default_grid_view,
+            show_hidden: explorer.show_hidden,
             search: TextController::new(""),
             scroll: ScrollController::new(0.0),
         };
@@ -57,7 +59,7 @@ impl Tab {
         self.error = None;
         self.entries = Rc::new(match self.location() {
             Location::Home => Vec::new(),
-            Location::Directory(path) => match files::entries(path) {
+            Location::Directory(path) => match files::entries(path, self.show_hidden) {
                 Ok(entries) => entries,
                 Err(error) => {
                     self.error = Some(format!("Could not read this folder: {error}"));

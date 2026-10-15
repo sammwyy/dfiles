@@ -96,6 +96,7 @@ whether to use it; keep other installed backends in that policy as fallbacks.
 
 ```text
 dfiles [FOLDER | file://URI]
+dfiles --settings
 dfiles --portal
 ```
 
@@ -104,8 +105,12 @@ dfiles --portal
 | `dfiles` | Opens File Explorer at Home. |
 | `dfiles /path/to/folder` | Opens a particular folder. |
 | `dfiles file:///path/to/folder` | Opens a local `file://` URI. |
+| `dfiles --settings` | Opens File Explorer settings. `--setings` is accepted as a compatibility alias. |
 | `dfiles --portal` | Starts the XDG Desktop Portal FileChooser backend. |
 | `dfiles --help` | Shows the available command-line options. |
+
+Settings are stored in `$XDG_CONFIG_HOME/dfiles/config.toml` (normally
+`~/.config/dfiles/config.toml`).
 
 ## Development
 

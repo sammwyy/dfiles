@@ -1,4 +1,5 @@
 use crate::{
+    config::ExplorerConfig,
     context::WindowContext,
     filesystem as files,
     icons::Icons,
@@ -37,9 +38,11 @@ pub(crate) struct BrowserState {
     pub(crate) window: Rc<RefCell<Option<WindowHandle>>>,
     pub(crate) maximized: Signal<bool>,
     pub(crate) result: Arc<Mutex<Option<PortalSelection>>>,
+    pub(crate) explorer: ExplorerConfig,
 }
 impl BrowserState {
     pub(crate) fn new(request: WindowRequest) -> Self {
+        let explorer = crate::config::Config::load().explorer;
         let location = request
             .start_directory
             .as_ref()
@@ -65,7 +68,7 @@ impl BrowserState {
         };
         Self {
             context: WindowContext::new(request),
-            tabs: Signal::new(vec![Tab::new(location)]),
+            tabs: Signal::new(vec![Tab::new(location, &explorer)]),
             active: Signal::new(0),
             pins: Signal::new(pins),
             recent: Signal::new(
@@ -87,6 +90,7 @@ impl BrowserState {
             window: Rc::new(RefCell::new(None)),
             maximized: Signal::new(false),
             result: Arc::new(Mutex::new(None)),
+            explorer,
         }
     }
     pub(crate) fn tab(&self) -> Tab {
@@ -124,7 +128,8 @@ impl BrowserState {
     }
     pub(crate) fn add_tab(&self) {
         batch(|| {
-            self.tabs.update(|tabs| tabs.push(Tab::new(Location::Home)));
+            self.tabs
+                .update(|tabs| tabs.push(Tab::new(Location::Home, &self.explorer)));
             self.switch(self.tabs.peek().len() - 1);
         });
     }
