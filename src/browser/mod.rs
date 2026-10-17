@@ -43,6 +43,7 @@ pub(crate) struct BrowserState {
     pub(crate) result: Arc<Mutex<Option<PortalSelection>>>,
     pub(crate) explorer: ExplorerConfig,
     pub(crate) search_active: Signal<bool>,
+    pub(crate) address_editing: Signal<bool>,
 }
 impl BrowserState {
     pub(crate) fn new(request: WindowRequest) -> Self {
@@ -96,12 +97,14 @@ impl BrowserState {
             result: Arc::new(Mutex::new(None)),
             explorer,
             search_active: Signal::new(false),
+            address_editing: Signal::new(false),
         }
     }
     pub(crate) fn toggle_search(&self) {
         let active = !self.search_active.peek();
         self.search_active.set(active);
         if active {
+            self.address_editing.set(false);
             if let Some(window) = self.window.borrow().as_ref() {
                 window.focus_text_input();
             }
@@ -117,6 +120,16 @@ impl BrowserState {
         if self.search_active.peek() && self.tab().search.peek().trim().is_empty() {
             self.cancel_search();
         }
+    }
+    pub(crate) fn begin_address_edit(&self) {
+        self.address_editing.set(true);
+        if let Some(window) = self.window.borrow().as_ref() {
+            window.focus_text_input();
+        }
+    }
+    pub(crate) fn cancel_address_edit(&self) {
+        self.edit(|tab| tab.address.set_value(tab.location().address()));
+        self.address_editing.set(false);
     }
     pub(crate) fn open_settings(&self) {
         match std::env::current_exe().and_then(|exe| Command::new(exe).arg("--settings").spawn()) {
@@ -218,6 +231,7 @@ impl BrowserState {
         let value = value.trim();
         if value == "Home" {
             self.navigate(Location::Home);
+            self.address_editing.set(false);
             return;
         }
         let base = match tab.location() {
@@ -243,7 +257,10 @@ impl BrowserState {
             base.join(value)
         };
         match fs::canonicalize(path) {
-            Ok(path) if path.is_dir() => self.navigate(Location::Directory(path)),
+            Ok(path) if path.is_dir() => {
+                self.navigate(Location::Directory(path));
+                self.address_editing.set(false);
+            }
             _ => self.message.set(Some(
                 "Folder not found. Check the address and try again.".into(),
             )),

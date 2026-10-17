@@ -16,7 +16,10 @@ pub(crate) use creamui_theme::{use_theme, Color};
 pub(crate) use creamui_widgets::{
     CUIWindowDragArea, Icon, RawButton, RawScrollView, RawView, Text, TextInput,
 };
-pub(crate) use std::{path::Path, rc::Rc};
+pub(crate) use std::{
+    path::{Component, Path},
+    rc::Rc,
+};
 
 pub(crate) mod navigation;
 pub(crate) mod portal_footer;

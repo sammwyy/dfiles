@@ -320,6 +320,31 @@ fn native_layout_and_portal_previews() {
         browser.explorer.tab_position = crate::config::TabPosition::Top;
         browser.navigate(Location::Directory(fixture.path().to_path_buf()));
         let scene = render(&browser, size, "list");
+        let address_point = Point { x: 400.0, y: 81.0 };
+        scene.hit_test(address_point).expect("breadcrumb address")();
+        assert!(browser.address_editing.peek());
+        let address_input = render(&browser, size, "address-input");
+        assert!(address_input.focus_hit_test(address_point).is_some());
+        browser.cancel_address_edit();
+
+        browser.toggle_search();
+        let search = render(&browser, size, "search-empty");
+        let search_focus = search.focus_hit_test(address_point).expect("search input");
+        search.on_focus_change_at(search_focus).unwrap()(false);
+        assert!(!browser.search_active.peek());
+
+        browser.toggle_search();
+        browser.tab().search.set_value("desk");
+        let search = render(&browser, size, "search-with-query");
+        let search_focus = search.focus_hit_test(address_point).expect("search input");
+        search.on_focus_change_at(search_focus).unwrap()(false);
+        assert!(browser.search_active.peek());
+        search.on_key_at(search_focus).unwrap()(creamui_core::KeyInput {
+            key: creamui_core::Key::Escape,
+            modifiers: Default::default(),
+        });
+        assert!(!browser.search_active.peek());
+
         scene
             .hit_test(Point { x: 1056.0, y: 81.0 })
             .expect("grid toggle")();
@@ -334,6 +359,7 @@ fn native_layout_and_portal_previews() {
         browser.activate(fixture.path().join("Desktop"), true);
         assert_eq!(browser.tab().column_paths.len(), 2);
         render(&browser, size, "columns");
+        browser.travel(false);
         browser.context.request.mode = WindowMode::Portal(PortalRequest::save("Untitled.txt"));
         browser.name.set_value("Untitled.txt");
         render(&browser, size, "portal-save");

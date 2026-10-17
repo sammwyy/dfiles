@@ -195,6 +195,8 @@ pub(crate) fn toolbar(
     }
     if b.search_active.get() {
         let cancel = b.clone();
+        let escape = b.clone();
+        let blur = b.clone();
         items.push(Box::new(
             RawView::new(Style {
                 flex_grow: 1.0,
@@ -217,29 +219,45 @@ pub(crate) fn toolbar(
                         .placeholder("Search files")
                         .corner_radius(7.0)
                         .background(t.colors.surface_elevated)
-                        .border(t.colors.border, 0.5),
+                        .border(t.colors.border, 0.5)
+                        .on_key_press(move |input| {
+                            if input.key == creamui_core::Key::Escape {
+                                escape.cancel_search();
+                            }
+                        })
+                        .on_focus_change(move |focused| {
+                            if !focused {
+                                blur.close_search_if_empty();
+                            }
+                        }),
                 ),
                 action("Cancel", false, true, move || cancel.cancel_search()),
             ]),
         ));
-    } else {
+    } else if b.address_editing.get() {
+        let escape = b.clone();
+        let blur = b.clone();
         items.push(Box::new(
             TextInput::controlled(&tab.address)
-                .layout(Style {
-                    flex_grow: 1.0,
-                    flex_basis: Dimension::Length(0.0),
-                    min_size: creamui_core::layout::Size {
-                        width: Dimension::Length(if compact_view_mode { 72.0 } else { 96.0 }),
-                        height: Dimension::Length(34.0),
-                    },
-                    ..TextInput::default_style()
-                })
+                .layout(address_field_style(compact_view_mode))
                 .font_size(12.0)
                 .corner_radius(7.0)
                 .background(t.colors.surface_elevated)
                 .border(t.colors.border, 0.5)
-                .on_submit(move || address.submit_address()),
+                .on_submit(move || address.submit_address())
+                .on_key_press(move |input| {
+                    if input.key == creamui_core::Key::Escape {
+                        escape.cancel_address_edit();
+                    }
+                })
+                .on_focus_change(move |focused| {
+                    if !focused {
+                        blur.cancel_address_edit();
+                    }
+                }),
         ));
+    } else {
+        items.push(address_breadcrumb(b, tab, compact_view_mode));
     }
     items.push(icon_button(b, "refresh", true, false, move || {
         refresh.edit(Tab::reload);
@@ -278,6 +296,67 @@ pub(crate) fn toolbar(
             ))
             .with_children(items),
     )
+}
+
+fn address_field_style(compact: bool) -> Style {
+    Style {
+        flex_grow: 1.0,
+        flex_basis: Dimension::Length(0.0),
+        min_size: creamui_core::layout::Size {
+            width: Dimension::Length(if compact { 72.0 } else { 96.0 }),
+            height: Dimension::Length(34.0),
+        },
+        ..TextInput::default_style()
+    }
+}
+
+fn address_breadcrumb(b: &BrowserState, tab: &Tab, compact: bool) -> BoxedWidget {
+    let t = use_theme();
+    let edit = b.clone();
+    let parts = breadcrumb_parts(tab.location());
+    let trail = short(&parts.join("  ›  "), if compact { 18 } else { 54 });
+    Box::new(
+        RawButton::new(address_field_style(compact), move || {
+            edit.begin_address_edit()
+        })
+        .background(t.colors.surface_elevated)
+        .border(t.colors.border, 0.5)
+        .corner_radius(7.0)
+        .hover_style(StateStyle::new().background(t.colors.surface_hover))
+        .with_children(vec![label(trail, 12.0, false)]),
+    )
+}
+
+fn breadcrumb_parts(location: &Location) -> Vec<String> {
+    let Location::Directory(path) = location else {
+        return vec!["Home".into()];
+    };
+    let home = files::home();
+    if path == &home {
+        return vec!["Home".into()];
+    }
+    if let Ok(relative) = path.strip_prefix(&home) {
+        return std::iter::once("Home".into())
+            .chain(relative.components().filter_map(component_label))
+            .collect();
+    }
+    let mut parts = if path.is_absolute() {
+        vec!["/".into()]
+    } else {
+        Vec::new()
+    };
+    parts.extend(path.components().filter_map(component_label));
+    if parts.is_empty() {
+        parts.push(path.display().to_string());
+    }
+    parts
+}
+
+fn component_label(component: Component<'_>) -> Option<String> {
+    match component {
+        Component::Normal(name) => Some(name.to_string_lossy().into_owned()),
+        _ => None,
+    }
 }
 
 fn view_mode_switcher(b: &BrowserState, active: DirectoryView, _compact: bool) -> BoxedWidget {
