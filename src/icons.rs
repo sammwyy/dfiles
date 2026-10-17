@@ -55,6 +55,7 @@ impl Icons {
             ("up", r#"<path d="m5 10 7-7 7 7M12 3v18"/>"#),
             ("chevron-up", r#"<path d="m6 14 6-6 6 6"/>"#),
             ("chevron-down", r#"<path d="m6 10 6 6 6-6"/>"#),
+            ("chevron-right", r#"<path d="m10 6 6 6-6 6"/>"#),
             (
                 "search",
                 r#"<circle cx="10" cy="10" r="6.5"/><path d="m15 15 6 6"/>"#,
@@ -66,6 +67,10 @@ impl Icons {
             (
                 "list",
                 r#"<path d="M9 5h12M9 12h12M9 19h12M3 5h1M3 12h1M3 19h1"/>"#,
+            ),
+            (
+                "columns",
+                r#"<rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="16" rx="1"/><rect x="17" y="4" width="4" height="16" rx="1"/>"#,
             ),
             ("plus", r#"<path d="M12 5v14M5 12h14"/>"#),
             ("close", r#"<path d="m6 6 12 12M6 18 18 6"/>"#),

@@ -1,11 +1,17 @@
 use crate::components::*;
-use crate::{config::ItemSize, navigation::SortColumn};
+use crate::{
+    config::ItemSize,
+    navigation::{DirectoryView, SortColumn},
+};
 use std::{cmp::Ordering, time::SystemTime};
 
 pub(crate) fn visible_entries(b: &BrowserState, tab: &Tab) -> Vec<files::Entry> {
+    matching_entries(b, tab, &tab.entries)
+}
+
+fn matching_entries(b: &BrowserState, tab: &Tab, source: &[files::Entry]) -> Vec<files::Entry> {
     let query = tab.search.value().to_lowercase();
-    let mut entries: Vec<_> = tab
-        .entries
+    let mut entries: Vec<_> = source
         .iter()
         .filter(|e| {
             b.context.accepts(&e.path, e.directory) && e.name().to_lowercase().contains(&query)
@@ -33,7 +39,7 @@ fn compare(a: &files::Entry, b: &files::Entry, column: SortColumn) -> Ordering {
 }
 
 pub(crate) fn directory_header(b: &BrowserState, tab: &Tab, width: f32) -> BoxedWidget {
-    if tab.grid {
+    if tab.view != DirectoryView::List {
         return view(fixed(1.0, 0.0), vec![]);
     }
     let c = &b.explorer.columns;
@@ -345,7 +351,7 @@ pub(crate) fn directory_view(b: &BrowserState, tab: &Tab, width: f32) -> BoxedWi
                 file_icon(&entry.path)
             };
             let name = entry.name();
-            let (style, children) = if tab.grid {
+            let (style, children) = if tab.view == DirectoryView::Grid {
                 (
                     pad(
                         Style {
@@ -428,13 +434,176 @@ pub(crate) fn directory_view(b: &BrowserState, tab: &Tab, width: f32) -> BoxedWi
             };
             items.push(Box::new(entry_button(b, style, active, entry, children)) as BoxedWidget);
         }
-        content.push(if tab.grid {
+        content.push(if tab.view == DirectoryView::Grid {
             wrap(items, 10.0)
         } else {
             view(column(2.0), items)
         });
     }
     view(pad(column(20.0), 24.0, 20.0), content)
+}
+
+/// Finder-like directory browser. Each path in the active branch receives a
+/// vertical column; opening a folder rebuilds the branch and consequently
+/// replaces every column to its right.
+pub(crate) fn columns_view(b: &BrowserState, tab: &Tab, width: f32) -> BoxedWidget {
+    let t = use_theme();
+    if tab.column_paths.is_empty() {
+        return empty_view(
+            b,
+            "No folder selected",
+            "Choose a folder to browse it in columns.",
+        );
+    }
+
+    // Keep the current directory visible on the right. On small windows,
+    // older ancestors make way for the last few useful columns.
+    let capacity = (width / 176.0).floor().max(1.0) as usize;
+    let start = tab.column_paths.len().saturating_sub(capacity);
+    let last = tab.column_paths.len() - 1;
+    let mut columns = Vec::new();
+    for (index, path) in tab.column_paths.iter().enumerate().skip(start) {
+        let active_column = index == last;
+        let header_color = if active_column {
+            t.colors.accent
+        } else {
+            t.colors.text_secondary
+        };
+        let entries = files::entries(path, tab.show_hidden)
+            .map(|entries| matching_entries(b, tab, &entries))
+            .map_err(|error| format!("Could not read this folder: {error}"));
+        let children = match entries {
+            Ok(entries) if entries.is_empty() => vec![view(
+                pad(column(4.0), 10.0, 12.0),
+                vec![label("This folder is empty", 11.0, true)],
+            )],
+            Ok(entries) => entries
+                .into_iter()
+                .map(|entry| {
+                    let selected = tab.column_paths.get(index + 1) == Some(&entry.path)
+                        || (active_column && tab.selected.as_ref() == Some(&entry.path));
+                    column_entry(b, entry, selected)
+                })
+                .collect(),
+            Err(error) => vec![view(
+                pad(column(4.0), 10.0, 12.0),
+                vec![label(error, 11.0, true)],
+            )],
+        };
+        let scroll = tab
+            .column_scrolls
+            .get(index)
+            .cloned()
+            .unwrap_or_else(|| tab.scroll.clone());
+        columns.push(Box::new(
+            RawView::new(Style {
+                flex_grow: 1.0,
+                flex_basis: Dimension::Length(0.0),
+                min_size: creamui_core::layout::Size {
+                    width: Dimension::Length(0.0),
+                    height: Dimension::Length(0.0),
+                },
+                ..column(0.0)
+            })
+            .background(if active_column {
+                t.colors.surface_elevated.mix(t.colors.accent, 0.075)
+            } else {
+                t.colors.surface
+            })
+            .border(
+                if active_column {
+                    t.colors.accent
+                } else {
+                    t.colors.border
+                },
+                if active_column { 1.0 } else { 0.5 },
+            )
+            .with_children(vec![
+                view(
+                    pad(row(7.0), 10.0, 8.0),
+                    vec![
+                        glyph(b, "folder", 15.0, header_color),
+                        label(short(&files::name(path), 22), 12.0, !active_column),
+                    ],
+                ),
+                Box::new(
+                    RawScrollView::controlled(
+                        Style {
+                            flex_grow: 1.0,
+                            flex_basis: Dimension::Length(0.0),
+                            min_size: creamui_core::layout::Size {
+                                width: Dimension::Length(0.0),
+                                height: Dimension::Length(0.0),
+                            },
+                            ..column(0.0)
+                        },
+                        scroll,
+                    )
+                    .child(view(pad(column(2.0), 6.0, 4.0), children)),
+                ),
+            ]),
+        ) as BoxedWidget);
+    }
+    view(
+        Style {
+            flex_grow: 1.0,
+            flex_basis: Dimension::Length(0.0),
+            min_size: creamui_core::layout::Size {
+                width: Dimension::Length(0.0),
+                height: Dimension::Length(0.0),
+            },
+            align_items: Some(AlignItems::Stretch),
+            ..row(0.0)
+        },
+        columns,
+    )
+}
+
+fn column_entry(b: &BrowserState, entry: files::Entry, selected: bool) -> BoxedWidget {
+    let icon = if entry.directory {
+        "folder"
+    } else {
+        file_icon(&entry.path)
+    };
+    let mut children = vec![glyph(b, icon, 18.0, use_theme().colors.accent)];
+    children.push(view(
+        Style {
+            flex_grow: 1.0,
+            flex_basis: Dimension::Length(0.0),
+            min_size: creamui_core::layout::Size {
+                width: Dimension::Length(0.0),
+                height: Dimension::Length(0.0),
+            },
+            ..row(0.0)
+        },
+        vec![label(short(&entry.name(), 22), 12.0, false)],
+    ));
+    if entry.directory {
+        children.push(glyph(
+            b,
+            "chevron-right",
+            14.0,
+            use_theme().colors.text_secondary,
+        ));
+    }
+    Box::new(entry_button(
+        b,
+        pad(fixed_row(30.0, 8.0), 6.0, 0.0),
+        selected,
+        entry,
+        children,
+    ))
+}
+
+fn fixed_row(height: f32, gap: f32) -> Style {
+    Style {
+        size: creamui_core::layout::Size {
+            width: Dimension::Percent(1.0),
+            height: Dimension::Length(height),
+        },
+        flex_shrink: 0.0,
+        ..row(gap)
+    }
 }
 
 fn end_cell(width: f32, text: impl Into<String>) -> BoxedWidget {

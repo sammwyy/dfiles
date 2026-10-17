@@ -1,4 +1,5 @@
 use super::*;
+use crate::navigation::DirectoryView;
 use crate::views::directory::visible_entries;
 
 pub(crate) const CHROME_HEIGHT: f32 = 54.0;
@@ -251,7 +252,7 @@ pub(crate) fn toolbar(
         items.push(icon_button(b, "plus", true, false, move || add.add_tab()));
     }
     if tab.location() != &Location::Home {
-        items.push(view_mode_switcher(b, tab.grid, compact_view_mode));
+        items.push(view_mode_switcher(b, tab.view, compact_view_mode));
     }
     if let Some(controls) = show_client_controls
         .then(|| window_chrome::client_controls(&b.icons, &b.window, &b.maximized))
@@ -279,15 +280,23 @@ pub(crate) fn toolbar(
     )
 }
 
-fn view_mode_switcher(b: &BrowserState, grid_active: bool, _compact: bool) -> BoxedWidget {
-    let toggle = b.clone();
-    // A compact, centered button replaces the former two-option selector.
-    icon_button(
-        b,
-        if grid_active { "list" } else { "grid" },
-        true,
-        false,
-        move || toggle.edit(|tab| tab.grid = !tab.grid),
+fn view_mode_switcher(b: &BrowserState, active: DirectoryView, _compact: bool) -> BoxedWidget {
+    let modes = [
+        (DirectoryView::List, "list"),
+        (DirectoryView::Grid, "grid"),
+        (DirectoryView::Columns, "columns"),
+    ];
+    view(
+        row(2.0),
+        modes
+            .into_iter()
+            .map(|(mode, icon)| {
+                let state = b.clone();
+                icon_button(b, icon, true, active == mode, move || {
+                    state.edit(|tab| tab.view = mode)
+                })
+            })
+            .collect(),
     )
 }
 

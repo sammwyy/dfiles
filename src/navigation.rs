@@ -7,6 +7,13 @@ pub(crate) enum Location {
     Home,
     Directory(PathBuf),
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum DirectoryView {
+    List,
+    Grid,
+    Columns,
+}
 impl Location {
     pub(crate) fn label(&self) -> String {
         match self {
@@ -29,7 +36,10 @@ pub(crate) struct Tab {
     pub(crate) entries: Rc<Vec<files::Entry>>,
     pub(crate) error: Option<String>,
     pub(crate) selected: Option<PathBuf>,
-    pub(crate) grid: bool,
+    pub(crate) view: DirectoryView,
+    /// Directories displayed from left to right in Columns Mode.
+    pub(crate) column_paths: Vec<PathBuf>,
+    pub(crate) column_scrolls: Vec<ScrollController>,
     pub(crate) sort: SortColumn,
     pub(crate) sort_ascending: bool,
     pub(crate) show_hidden: bool,
@@ -49,6 +59,7 @@ pub(crate) enum SortColumn {
 }
 impl Tab {
     pub(crate) fn new(location: Location, explorer: &ExplorerConfig) -> Self {
+        let column_paths = column_paths(&location);
         let mut tab = Self {
             address: TextController::new(location.address()),
             history: vec![location],
@@ -56,7 +67,16 @@ impl Tab {
             entries: Rc::new(Vec::new()),
             error: None,
             selected: None,
-            grid: explorer.default_grid_view,
+            view: if explorer.default_grid_view {
+                DirectoryView::Grid
+            } else {
+                DirectoryView::List
+            },
+            column_scrolls: column_paths
+                .iter()
+                .map(|_| ScrollController::new(0.0))
+                .collect(),
+            column_paths,
             sort: SortColumn::Name,
             sort_ascending: true,
             show_hidden: explorer.show_hidden,
@@ -94,6 +114,7 @@ impl Tab {
         self.search.set_value("");
         self.address.set_value(self.location().address());
         self.scroll.set(0.0);
+        self.sync_columns();
         self.reload();
     }
     pub(crate) fn navigate(&mut self, location: Location) {
@@ -113,5 +134,92 @@ impl Tab {
             return;
         }
         self.moved();
+    }
+
+    /// Opens a directory from a Columns Mode column. Unlike regular
+    /// navigation, retain the branch to its parent so only the columns to the
+    /// right are replaced.
+    pub(crate) fn navigate_column(&mut self, path: PathBuf) {
+        let location = Location::Directory(path.clone());
+        if self.location() != &location {
+            self.history.truncate(self.cursor + 1);
+            self.history.push(location);
+            self.cursor += 1;
+        }
+        self.selected = None;
+        self.search.set_value("");
+        self.address.set_value(self.location().address());
+        self.scroll.set(0.0);
+        if let Some(parent_index) = path
+            .parent()
+            .and_then(|parent| self.column_paths.iter().position(|column| column == parent))
+        {
+            self.column_paths.truncate(parent_index + 1);
+            self.column_paths.push(path);
+            self.column_scrolls.truncate(parent_index + 1);
+            self.column_scrolls.push(ScrollController::new(0.0));
+        } else {
+            self.sync_columns();
+        }
+        self.reload();
+    }
+
+    fn sync_columns(&mut self) {
+        self.column_paths = column_paths(self.location());
+        self.column_scrolls = self
+            .column_paths
+            .iter()
+            .map(|_| ScrollController::new(0.0))
+            .collect();
+    }
+}
+
+fn column_paths(location: &Location) -> Vec<PathBuf> {
+    let Location::Directory(path) = location else {
+        return Vec::new();
+    };
+    let home = files::home();
+    let root = if path.starts_with(&home) {
+        home
+    } else {
+        path.clone()
+    };
+    let mut paths = vec![root.clone()];
+    let Ok(relative) = path.strip_prefix(&root) else {
+        return paths;
+    };
+    let mut current = root;
+    for component in relative.components() {
+        current.push(component.as_os_str());
+        paths.push(current.clone());
+    }
+    paths
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn column_branch_tracks_the_active_directory_and_replaces_its_tail() {
+        let fixture = tempfile::tempdir().unwrap();
+        let parent = fixture.path().join("parent");
+        let first = parent.join("first");
+        let second = parent.join("second");
+        std::fs::create_dir(&parent).unwrap();
+        std::fs::create_dir(&first).unwrap();
+        std::fs::create_dir(&second).unwrap();
+
+        let mut tab = Tab::new(
+            Location::Directory(parent.clone()),
+            &ExplorerConfig::default(),
+        );
+        tab.navigate_column(first.clone());
+        assert_eq!(tab.column_paths, vec![parent.clone(), first]);
+        assert_eq!(tab.column_scrolls.len(), 2);
+
+        tab.navigate_column(second.clone());
+        assert_eq!(tab.column_paths, vec![parent, second]);
+        assert_eq!(tab.column_scrolls.len(), 2);
     }
 }

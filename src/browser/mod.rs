@@ -3,7 +3,7 @@ use crate::{
     context::WindowContext,
     filesystem as files,
     icons::Icons,
-    navigation::{Location, Tab},
+    navigation::{DirectoryView, Location, Tab},
     portal::{PortalSelection, PortalType},
     window::{WindowMode, WindowRequest},
 };
@@ -165,6 +165,14 @@ impl BrowserState {
             self.edit(|t| t.navigate(location));
         });
     }
+    pub(crate) fn navigate_column(&self, path: PathBuf) {
+        batch(|| {
+            self.message.set(None);
+            self.overwrite.set(None);
+            *self.last_click.borrow_mut() = None;
+            self.edit(|tab| tab.navigate_column(path));
+        });
+    }
     pub(crate) fn travel(&self, forward: bool) {
         batch(|| {
             self.message.set(None);
@@ -279,7 +287,11 @@ impl BrowserState {
     }
     pub(crate) fn activate(&self, path: PathBuf, directory: bool) {
         if directory {
-            self.navigate(Location::Directory(path));
+            if self.tab().view == DirectoryView::Columns {
+                self.navigate_column(path);
+            } else {
+                self.navigate(Location::Directory(path));
+            }
         } else if !path.is_file() {
             self.message
                 .set(Some("This file is no longer available.".into()));

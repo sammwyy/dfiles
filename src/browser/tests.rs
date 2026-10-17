@@ -80,12 +80,12 @@ fn navigation_history_branches_and_tabs_keep_their_state() {
     assert_eq!(browser.tab().cursor + 1, browser.tab().history.len());
     browser.navigate(Location::Directory(a.clone()));
     browser.tab().search.set_value("report");
-    browser.edit(|t| t.grid = true);
+    browser.edit(|t| t.view = crate::navigation::DirectoryView::Grid);
     browser.add_tab();
     browser.navigate(Location::Directory(b));
     browser.switch(0);
     assert_eq!(browser.tab().search.value(), "report");
-    assert!(browser.tab().grid);
+    assert_eq!(browser.tab().view, crate::navigation::DirectoryView::Grid);
     browser.close_tab(1);
     assert_eq!(browser.tab().location(), &Location::Directory(a));
     browser.close_tab(0);
@@ -321,16 +321,25 @@ fn native_layout_and_portal_previews() {
         browser.navigate(Location::Directory(fixture.path().to_path_buf()));
         let scene = render(&browser, size, "list");
         scene
-            .hit_test(Point { x: 1092.0, y: 81.0 })
+            .hit_test(Point { x: 1056.0, y: 81.0 })
             .expect("grid toggle")();
-        assert!(browser.tab().grid);
-        render(&browser, size, "grid");
+        assert_eq!(browser.tab().view, crate::navigation::DirectoryView::Grid);
+        let grid = render(&browser, size, "grid");
+        grid.hit_test(Point { x: 1092.0, y: 81.0 })
+            .expect("columns toggle")();
+        assert_eq!(
+            browser.tab().view,
+            crate::navigation::DirectoryView::Columns
+        );
+        browser.activate(fixture.path().join("Desktop"), true);
+        assert_eq!(browser.tab().column_paths.len(), 2);
+        render(&browser, size, "columns");
         browser.context.request.mode = WindowMode::Portal(PortalRequest::save("Untitled.txt"));
         browser.name.set_value("Untitled.txt");
         render(&browser, size, "portal-save");
         browser.context.request.mode = WindowMode::Portal(PortalRequest::new(PortalType::OpenFile));
         browser.context.request.title = "Open a document".into();
-        browser.edit(|t| t.grid = false);
+        browser.edit(|t| t.view = crate::navigation::DirectoryView::List);
         render(&browser, size, "portal-open");
         decorations.set(WindowDecorations {
             mode: WindowDecorationMode::Client,
