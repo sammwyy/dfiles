@@ -62,7 +62,7 @@ fn build_scoped(b: &BrowserState, size: Size) -> BoxedWidget {
     if tab.location() != &Location::Home {
         // This is deliberately outside RawScrollView: column labels remain
         // available while a long directory is being scrolled.
-        main.push(directory_header(b, &tab));
+        main.push(directory_header(b, &tab, content_width));
     }
     main.push(scroll as BoxedWidget);
     if let Some(message) = b.message.get() {
